@@ -33,13 +33,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let listener_address = format!("{}:{}", args.local_address, args.local_port);
     log::info!("start listening on {}", listener_address);
-    // TODO - support both TCP and UDP
+    // TODO - support both TCP and UDP?
     let listener = TcpListener::bind(listener_address).await?;
 
     let to_address = format!("{}:{}", args.remote_address, args.remote_port);
     while let (in_stream, in_address) = listener.accept().await? {
         log::debug!("got connection from {}", in_address);
-        let task = handle_in_stream(to_address.clone(), in_stream);
+        let to_address = to_address.clone();
+        let task = async move {
+            if let Err(e) = handle_in_stream(to_address, in_stream).await {
+                log::error!("failed to handle in stream: {}", e);
+            }
+        };
+
         tokio::spawn(task);
     }
 
