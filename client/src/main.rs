@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(listener_address).await?;
 
     let to_address = format!("{}:{}", args.remote_address, args.remote_port);
-    while let (in_stream, in_address) = listener.accept().await? {
+    while let Ok((in_stream, in_address)) = listener.accept().await {
         log::debug!("got connection from {}", in_address);
         let to_address = to_address.clone();
         let task = async move {
@@ -68,6 +68,8 @@ async fn handle_in_stream(to_address: String, mut in_stream: TcpStream) -> Resul
         in_write.shutdown().await
     };
 
-    tokio::try_join!(in_to_out, out_to_in);
-    Ok(())
+    match tokio::try_join!(in_to_out, out_to_in) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.into()),
+    }
 }
