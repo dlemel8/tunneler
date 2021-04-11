@@ -15,13 +15,13 @@ struct Cli {
     #[structopt(env)]
     remote_port: u16,
 
-    #[structopt(default_value = "0.0.0.0", long="address", env)]
+    #[structopt(default_value = "0.0.0.0", env = "ADDRESS")]
     local_address: IpAddr,
 
-    #[structopt(default_value = "8888", long="port", env)]
+    #[structopt(default_value = "8888", env = "PORT")]
     local_port: u16,
 
-    #[structopt(default_value = "info", long, env)]
+    #[structopt(default_value = "info", env)]
     log_level: log::LevelFilter,
 }
 
