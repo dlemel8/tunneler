@@ -1,0 +1,26 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install examples runtime dependencies
+        run: sudo apt-get install -y libpcap-dev
+      - name: Install linters
+        run: rustup component add clippy rustfmt
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+      - name: Rustfmt
+        run: cargo fmt --all -- --check
+      - name: Run tests
+        run: cargo test --all-targets
+      - uses: akhileshns/heroku-deploy@v3.12.12
+        with:
+          heroku_api_key: ${{secrets.HEROKU_API_KEY}}
+          heroku_app_name: "redis-tunneler"
+          heroku_email: "dlemel8gmail.com"
