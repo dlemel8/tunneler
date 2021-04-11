@@ -4,8 +4,8 @@ use std::net::IpAddr;
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 use tokio::io;
-use tokio::net::{TcpListener, TcpStream};
 use tokio::io::AsyncWriteExt;
+use tokio::net::{TcpListener, TcpStream};
 
 #[derive(StructOpt, Debug)]
 struct Cli {
@@ -28,7 +28,10 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args: Cli = Cli::from_args();
-    SimpleLogger::new().with_level(args.log_level).init().unwrap();
+    SimpleLogger::new()
+        .with_level(args.log_level)
+        .init()
+        .unwrap();
     log::debug!("args are {:?}", args);
 
     let listener_address = format!("{}:{}", args.local_address, args.local_port);
@@ -52,7 +55,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn handle_in_stream(to_address: String, mut in_stream: TcpStream) -> Result<(), Box<dyn Error>> {
+async fn handle_in_stream(
+    to_address: String,
+    mut in_stream: TcpStream,
+) -> Result<(), Box<dyn Error>> {
     log::debug!("connecting to {}", to_address);
     let mut out_stream = TcpStream::connect(to_address).await?;
 
