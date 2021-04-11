@@ -9,19 +9,19 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[derive(StructOpt, Debug)]
 struct Cli {
-    #[structopt()]
+    #[structopt(env)]
     remote_address: IpAddr,
 
-    #[structopt()]
+    #[structopt(env)]
     remote_port: u16,
 
-    #[structopt(default_value = "127.0.0.1", long = "local_address")]
+    #[structopt(default_value = "127.0.0.1", long, env)]
     local_address: IpAddr,
 
-    #[structopt(default_value = "8888", long = "local_port")]
+    #[structopt(default_value = "8888", long, env)]
     local_port: u16,
 
-    #[structopt(default_value = "info", long = "log_level")]
+    #[structopt(default_value = "info", long, env)]
     log_level: log::LevelFilter,
 }
 
