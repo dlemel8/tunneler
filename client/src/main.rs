@@ -15,10 +15,10 @@ struct Cli {
     #[structopt(env)]
     remote_port: u16,
 
-    #[structopt(default_value = "0.0.0.0", env = "ADDRESS")]
+    #[structopt(default_value = "0.0.0.0", env)]
     local_address: IpAddr,
 
-    #[structopt(default_value = "8888", env = "PORT")]
+    #[structopt(default_value = "8888", env)]
     local_port: u16,
 
     #[structopt(default_value = "info", env)]
