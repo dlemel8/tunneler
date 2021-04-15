@@ -1,6 +1,6 @@
 FROM rust:1.51.0-alpine3.13 as builder
 
-RUN apk add musl-dev
+RUN apk add musl-dev && rustup component add clippy rustfmt
 
 ARG EXECUTABLE=client
 
@@ -13,7 +13,10 @@ COPY ${EXECUTABLE}/Cargo.lock ${EXECUTABLE}/Cargo.toml ./
 RUN cargo build --release
 
 COPY ${EXECUTABLE}/src src
-RUN touch -a -m ./src/main.rs && cargo build --release
+RUN cargo clippy -- -D warnings && \
+    cargo fmt --all -- --check && \
+    cargo test --all-targets && \
+    touch -a -m ./src/main.rs && cargo build --release
 
 FROM alpine:3.13
 
