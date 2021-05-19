@@ -3,9 +3,14 @@ use std::net::IpAddr;
 
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
-use tokio::io;
-use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
+
+use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper, Tunnel, TcpTunnel};
+use tokio::io::AsyncWriteExt;
+use crate::dns::DnsTunnel;
+
+mod dns;
+mod tunnel;
 
 #[derive(StructOpt, Debug)]
 struct Cli {
@@ -15,13 +20,13 @@ struct Cli {
     #[structopt(env)]
     remote_port: u16,
 
-    #[structopt(default_value = "0.0.0.0", env)]
+    #[structopt(default_value = "0.0.0.0", long, env)]
     local_address: IpAddr,
 
-    #[structopt(default_value = "8888", env)]
+    #[structopt(default_value = "8888", long, env)]
     local_port: u16,
 
-    #[structopt(default_value = "info", env)]
+    #[structopt(default_value = "info", long, env)]
     log_level: log::LevelFilter,
 }
 
@@ -39,12 +44,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // TODO - support both TCP and UDP?
     let listener = TcpListener::bind(listener_address).await?;
 
-    let to_address = format!("{}:{}", args.remote_address, args.remote_port);
     while let Ok((in_stream, in_address)) = listener.accept().await {
         log::debug!("got connection from {}", in_address);
-        let to_address = to_address.clone();
+        let remote_address = args.remote_address;
+        let remote_port = args.remote_port;
         let task = async move {
-            if let Err(e) = handle_in_stream(to_address, in_stream).await {
+            if let Err(e) = handle_in_stream(remote_address, remote_port, in_stream).await {
                 log::error!("failed to handle in stream: {}", e);
             }
         };
@@ -55,27 +60,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+pub(crate) async fn new_tunnel(address: IpAddr, port: u16) -> Result<Box<dyn Tunnel>, Box<dyn Error>> {
+    let tunnel = TcpTunnel::new(address, port).await?;
+    // let tunnel = DnsTunnel::new(address, port).await?;
+    return Ok(Box::new(tunnel));
+}
+
 async fn handle_in_stream(
-    to_address: String,
-    mut in_stream: TcpStream,
+    remote_address: IpAddr,
+    remote_port: u16,
+    in_stream: TcpStream,
 ) -> Result<(), Box<dyn Error>> {
-    log::debug!("connecting to {}", to_address);
-    let mut out_stream = TcpStream::connect(to_address).await?;
+    let (in_read, mut in_write) = in_stream.into_split(); // TODO: convert to split, and use reference instead of box?
 
-    let (mut in_read, mut in_write) = in_stream.split();
-    let (mut out_read, mut out_write) = out_stream.split();
-
-    let in_to_out = async {
-        io::copy(&mut in_read, &mut out_write).await?;
-        out_write.shutdown().await
-    };
-    let out_to_in = async {
-        io::copy(&mut out_read, &mut in_write).await?;
-        in_write.shutdown().await
-    };
-
-    match tokio::try_join!(in_to_out, out_to_in) {
-        Ok(_) => Ok(()),
+    let mut tunnel = new_tunnel(remote_address, remote_port).await?;
+    let reader = Box::new(AsyncReadWrapper { reader: in_read });
+    let writer = Box::new(AsyncWriteWrapper { writer: in_write });
+    match tunnel.tunnel(reader, writer).await {
+        Ok(_) => {
+            // TODO: restore this
+            // in_write.shutdown().await;
+            Ok(())
+        },
         Err(e) => Err(e.into()),
     }
 }
