@@ -5,9 +5,8 @@ use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpStream};
 
-use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper, Tunneler, TcpTunneler};
-use tokio::io::AsyncWriteExt;
 use crate::dns::DnsTunnel;
+use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper, TcpTunneler, Tunneler};
 
 mod dns;
 mod tunnel;
@@ -71,17 +70,13 @@ async fn handle_in_stream(
     remote_port: u16,
     in_stream: TcpStream,
 ) -> Result<(), Box<dyn Error>> {
-    let (in_read, mut in_write) = in_stream.into_split(); // TODO: convert to split, and use reference instead of box?
+    let (in_read, in_write) = in_stream.into_split();
 
     let mut tunnel = new_tunnel(remote_address, remote_port).await?;
     let reader = Box::new(AsyncReadWrapper::new(in_read));
     let writer = Box::new(AsyncWriteWrapper::new(in_write));
     match tunnel.tunnel(reader, writer).await {
-        Ok(_) => {
-            // TODO: restore this
-            // in_write.shutdown().await;
-            Ok(())
-        },
+        Ok(_) => Ok(()),
         Err(e) => Err(e.into()),
     }
 }

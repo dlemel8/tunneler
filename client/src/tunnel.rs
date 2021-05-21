@@ -105,7 +105,7 @@ impl Tunneler for TcpTunneler {
                 log::debug!("going to send {:?}", &data_to_send[..size]);
                 writer.write(&data_to_send[..size]).await?;
             }
-            Ok(())
+            writer.shutdown().await
         };
 
         match tokio::try_join!(in_to_out, out_to_in) {
