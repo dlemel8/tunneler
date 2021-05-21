@@ -14,8 +14,8 @@ mod tunnel;
 arg_enum! {
     #[derive(Debug, Copy, Clone)]
     enum TunnelType {
-        TCP,
-        DNS,
+        Tcp,
+        Dns,
     }
 }
 
@@ -73,8 +73,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 pub(crate) async fn new_tunneler(tunnel_type: TunnelType, address: IpAddr, port: u16) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
     match tunnel_type {
-        TunnelType::TCP => Ok(Box::new(TcpTunneler::new(address, port).await?)),
-        TunnelType::DNS => Ok(Box::new(DnsTunnel::new(address, port).await?)),
+        TunnelType::Tcp => Ok(Box::new(TcpTunneler::new(address, port).await?)),
+        TunnelType::Dns => Ok(Box::new(DnsTunnel::new(address, port).await?)),
     }
 }
 
