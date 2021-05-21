@@ -60,7 +60,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let remote_address = args.remote_address;
         let remote_port = args.remote_port;
         let task = async move {
-            if let Err(e) = handle_in_stream(tunnel_type, remote_address, remote_port, in_stream).await {
+            if let Err(e) =
+                handle_in_stream(tunnel_type, remote_address, remote_port, in_stream).await
+            {
                 log::error!("failed to handle in stream: {}", e);
             }
         };
@@ -71,7 +73,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub(crate) async fn new_tunneler(tunnel_type: TunnelType, address: IpAddr, port: u16) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
+pub(crate) async fn new_tunneler(
+    tunnel_type: TunnelType,
+    address: IpAddr,
+    port: u16,
+) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
     match tunnel_type {
         TunnelType::Tcp => Ok(Box::new(TcpTunneler::new(address, port).await?)),
         TunnelType::Dns => Ok(Box::new(DnsTunnel::new(address, port).await?)),
@@ -89,8 +95,5 @@ async fn handle_in_stream(
     let mut tunnel = new_tunneler(tunnel_type, remote_address, remote_port).await?;
     let reader = Box::new(AsyncReadWrapper::new(in_read));
     let writer = Box::new(AsyncWriteWrapper::new(in_write));
-    match tunnel.tunnel(reader, writer).await {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e.into()),
-    }
+    tunnel.tunnel(reader, writer).await
 }
