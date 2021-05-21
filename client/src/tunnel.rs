@@ -83,22 +83,28 @@ impl Tunneler for TcpTunneler {
         let self_writer = &mut self.writer;
         let in_to_out = async {
             let mut data_to_send = vec![0; 4096];
-            let size = reader.read(&mut data_to_send).await?;
-            if size == 0 {
-                return Ok(());
+            loop {
+                let size = reader.read(&mut data_to_send).await?;
+                if size == 0 {
+                    break;
+                }
+                log::debug!("going to send {:?}", &data_to_send[..size]);
+                self_writer.write(&data_to_send[..size]).await?;
             }
-            self_writer.write(data_to_send.as_slice()).await?;
             self_writer.shutdown().await
         };
 
         let self_reader = &mut self.reader;
         let out_to_in = async {
             let mut data_to_send = vec![0; 4096];
-            let size = self_reader.read(&mut data_to_send).await?;
-            if size == 0 {
-                return Ok(());
+            loop {
+                let size = self_reader.read(&mut data_to_send).await?;
+                if size == 0 {
+                    break;
+                }
+                log::debug!("going to send {:?}", &data_to_send[..size]);
+                writer.write(&data_to_send[..size]).await?;
             }
-            writer.write(&data_to_send[..size]).await?;
             Ok(())
         };
 
@@ -116,8 +122,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn read_single_read() -> Result<(), Box<dyn Error>> {
-        // arrange
+    async fn single_read() -> Result<(), Box<dyn Error>> {
         let tunneler_read_mock = Builder::new().build();
         let tunneler_reader = Box::new(AsyncReadWrapper::new(tunneler_read_mock));
         let tunneler_write_mock = Builder::new().write(b"hello").build();
@@ -129,14 +134,11 @@ mod tests {
         let tunneled_write_mock = Builder::new().build();
         let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
 
-        // act
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await?;
-        Ok(())
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
     }
 
     #[tokio::test]
-    async fn read_single_write() -> Result<(), Box<dyn Error>> {
-        // arrange
+    async fn single_write() -> Result<(), Box<dyn Error>> {
         let tunneler_read_mock = Builder::new().read(b"hello").build();
         let tunneler_reader = Box::new(AsyncReadWrapper::new(tunneler_read_mock));
         let tunneler_write_mock = Builder::new().build();
@@ -148,8 +150,54 @@ mod tests {
         let tunneled_write_mock = Builder::new().write(b"hello").build();
         let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
 
-        // act
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await?;
-        Ok(())
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+    }
+
+    #[tokio::test]
+    async fn single_read_write() -> Result<(), Box<dyn Error>> {
+        let tunneler_read_mock = Builder::new().read(b"hello").build();
+        let tunneler_reader = Box::new(AsyncReadWrapper::new(tunneler_read_mock));
+        let tunneler_write_mock = Builder::new().write(b"world").build();
+        let tunneler_writer = Box::new(AsyncWriteWrapper::new(tunneler_write_mock));
+        let mut tunneler = TcpTunneler{reader: tunneler_reader, writer: tunneler_writer};
+
+        let tunneled_read_mock = Builder::new().read(b"world").build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().write(b"hello").build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+    }
+
+    #[tokio::test]
+    async fn multiple_reads() -> Result<(), Box<dyn Error>> {
+        let tunneler_read_mock = Builder::new().build();
+        let tunneler_reader = Box::new(AsyncReadWrapper::new(tunneler_read_mock));
+        let tunneler_write_mock = Builder::new().write(b"1").write(b"2").write(b"3").build();
+        let tunneler_writer = Box::new(AsyncWriteWrapper::new(tunneler_write_mock));
+        let mut tunneler = TcpTunneler{reader: tunneler_reader, writer: tunneler_writer};
+
+        let tunneled_read_mock = Builder::new().read(b"1").read(b"2").read(b"3").build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+    }
+
+    #[tokio::test]
+    async fn multiple_writes() -> Result<(), Box<dyn Error>> {
+        let tunneler_read_mock = Builder::new().read(b"1").read(b"2").read(b"3").build();
+        let tunneler_reader = Box::new(AsyncReadWrapper::new(tunneler_read_mock));
+        let tunneler_write_mock = Builder::new().build();
+        let tunneler_writer = Box::new(AsyncWriteWrapper::new(tunneler_write_mock));
+        let mut tunneler = TcpTunneler{reader: tunneler_reader, writer: tunneler_writer};
+
+        let tunneled_read_mock = Builder::new().build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().write(b"1").write(b"2").write(b"3").build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
     }
 }
