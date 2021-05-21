@@ -9,7 +9,7 @@ use trust_dns_client::proto::rr::Name;
 use trust_dns_client::rr::{DNSClass, RData, RecordType};
 use trust_dns_client::udp::UdpClientStream;
 
-use crate::tunnel::{AsyncReader, Tunnel, AsyncWriter};
+use crate::tunnel::{AsyncReader, Tunneler, AsyncWriter};
 
 pub(crate) struct DnsTunnel {
     client: AsyncClient,
@@ -26,7 +26,7 @@ impl DnsTunnel {
 }
 
 #[async_trait]
-impl Tunnel for DnsTunnel {
+impl Tunneler for DnsTunnel {
     async fn tunnel(&mut self, mut reader: Box<dyn AsyncReader>, mut writer: Box<dyn AsyncWriter>) -> Result<(), Box<dyn Error>>  {
         let mut data_to_send = vec![0; 4096]; // TODO - get max from encoder
         let size = reader.read(&mut data_to_send).await?;

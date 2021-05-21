@@ -5,7 +5,7 @@ use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpStream};
 
-use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper, Tunnel, TcpTunnel};
+use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper, Tunneler, TcpTunneler};
 use tokio::io::AsyncWriteExt;
 use crate::dns::DnsTunnel;
 
@@ -60,8 +60,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub(crate) async fn new_tunnel(address: IpAddr, port: u16) -> Result<Box<dyn Tunnel>, Box<dyn Error>> {
-    let tunnel = TcpTunnel::new(address, port).await?;
+pub(crate) async fn new_tunnel(address: IpAddr, port: u16) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
+    let tunnel = TcpTunneler::new(address, port).await?;
     // let tunnel = DnsTunnel::new(address, port).await?;
     return Ok(Box::new(tunnel));
 }
@@ -74,8 +74,8 @@ async fn handle_in_stream(
     let (in_read, mut in_write) = in_stream.into_split(); // TODO: convert to split, and use reference instead of box?
 
     let mut tunnel = new_tunnel(remote_address, remote_port).await?;
-    let reader = Box::new(AsyncReadWrapper { reader: in_read });
-    let writer = Box::new(AsyncWriteWrapper { writer: in_write });
+    let reader = Box::new(AsyncReadWrapper::new(in_read));
+    let writer = Box::new(AsyncWriteWrapper::new(in_write));
     match tunnel.tunnel(reader, writer).await {
         Ok(_) => {
             // TODO: restore this
