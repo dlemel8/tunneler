@@ -20,8 +20,8 @@ tokio-test = "0.4.2"
 
 [[bin]]
 name = "server"
-path = "src/server/bin/main.rs"
+path = "src/server/main.rs"
 
 [[bin]]
 name = "client"
-path = "src/client/bin/main.rs"
+path = "src/client/main.rs"
