@@ -1,5 +1,5 @@
 [package]
-name = "client"
+name = "tunneler"
 version = "0.1.0"
 authors = ["Daniel Segal <dlemel8@gmail.com>"]
 edition = "2018"
@@ -17,3 +17,11 @@ hex = "0.4"
 
 [dev-dependencies]
 tokio-test = "0.4.2"
+
+[[bin]]
+name = "server"
+path = "src/server/bin/main.rs"
+
+[[bin]]
+name = "client"
+path = "src/client/bin/main.rs"
