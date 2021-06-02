@@ -44,11 +44,12 @@ impl Tunneler for DnsTunnel {
                 RecordType::TXT,
             )
             .await?;
-        let received_data = match response.answers()[0].rdata() {
+        let encoded_received_data = match response.answers()[0].rdata() {
             RData::TXT(text) => format!("{}", text),
             _ => return Err("bla".into()),
         };
-        let data_to_write = hex::decode(received_data)?;
+        log::debug!("received {:?}", encoded_received_data);
+        let data_to_write = hex::decode(encoded_received_data)?;
         match writer.write(data_to_write.as_slice()).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
