@@ -1,4 +1,5 @@
 use simple_logger::SimpleLogger;
+use std::array::IntoIter;
 use std::error::Error;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
@@ -17,10 +18,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_level(log::LevelFilter::Debug)
         .init()
         .unwrap();
-    log::debug!("bla");
+    log::debug!("start server");
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8899));
     let udp_socket = UdpSocket::bind(addr).await?;
-    let mut server = ServerFuture::new(A {});
+    let mut server = ServerFuture::new(EchoRequestHandler {});
     server.register_socket(udp_socket);
     match server.block_until_done().await {
         Ok(_) => Ok(()),
@@ -28,28 +29,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-struct A {}
-
 fn new_iterator<'a>(
     record: Option<&'a Record>,
 ) -> Box<dyn Iterator<Item = &'a Record> + Send + 'a> {
     match record {
-        None => Box::new(std::array::IntoIter::new([])),
-        Some(r) => Box::new(std::array::IntoIter::new([r])),
+        None => Box::new(IntoIter::new([])),
+        Some(r) => Box::new(IntoIter::new([r])),
     }
 }
 
 async fn echo<R: ResponseHandler>(request: Request, mut response_handle: R) {
-    let queries = request.message.raw_queries();
-    let builder = MessageResponseBuilder::new(Option::from(queries));
+    let message = request.message;
+    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
 
     let mut response_header = Header::new();
-    response_header.set_id(request.message.id());
+    response_header.set_id(message.id());
     response_header.set_op_code(OpCode::Query);
     response_header.set_message_type(MessageType::Response);
     response_header.set_authoritative(true);
 
-    let first_query = (&request.message.queries()[0]).original();
+    let first_query = (&message.queries()[0]).original();
     if first_query.query_type() != RecordType::TXT {
         response_handle
             .send_response(builder.build_no_records(response_header))
@@ -62,6 +61,7 @@ async fn echo<R: ResponseHandler>(request: Request, mut response_handle: R) {
         .to_string()
         .trim_end_matches('.')
         .to_string();
+
     log::debug!("received {:?}", encoded_received_data);
     let answer = Record::new()
         .set_rdata(RData::TXT(TXT::new(vec![encoded_received_data])))
@@ -79,7 +79,9 @@ async fn echo<R: ResponseHandler>(request: Request, mut response_handle: R) {
     response_handle.send_response(response).unwrap();
 }
 
-impl RequestHandler for A {
+struct EchoRequestHandler {}
+
+impl RequestHandler for EchoRequestHandler {
     type ResponseFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
     fn handle_request<R: ResponseHandler>(
