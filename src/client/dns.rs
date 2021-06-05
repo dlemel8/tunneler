@@ -3,30 +3,65 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 
 use async_trait::async_trait;
+#[cfg(test)]
+use mockall::automock;
 use tokio::net::UdpSocket;
 use trust_dns_client::client::{AsyncClient, ClientHandle};
+use trust_dns_client::op::DnsResponse;
 use trust_dns_client::proto::rr::Name;
 use trust_dns_client::rr::{DNSClass, RData, RecordType};
 use trust_dns_client::udp::UdpClientStream;
 
 use crate::tunnel::{AsyncReader, AsyncWriter, Tunneler};
 
-pub(crate) struct DnsTunnel {
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub(crate) trait AsyncDnsClient: Send {
+    async fn query(
+        &mut self,
+        name: Name,
+        query_class: DNSClass,
+        query_type: RecordType,
+    ) -> Result<DnsResponse, Box<dyn Error>>;
+}
+
+struct AsyncClientWrapper {
     client: AsyncClient,
 }
 
-impl DnsTunnel {
-    pub(crate) async fn new(address: IpAddr, port: u16) -> Result<DnsTunnel, Box<dyn Error>> {
+#[async_trait]
+impl AsyncDnsClient for AsyncClientWrapper {
+    async fn query(
+        &mut self,
+        name: Name,
+        query_class: DNSClass,
+        query_type: RecordType,
+    ) -> Result<DnsResponse, Box<dyn Error>> {
+        match self.client.query(name, query_class, query_type).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(e.into()),
+        }
+    }
+}
+
+pub(crate) struct DnsTunneler {
+    client: Box<dyn AsyncDnsClient>,
+}
+
+impl DnsTunneler {
+    pub(crate) async fn new(address: IpAddr, port: u16) -> Result<Self, Box<dyn Error>> {
         let socket = SocketAddr::new(address, port);
         let stream = UdpClientStream::<UdpSocket>::new(socket);
         let (client, background) = AsyncClient::connect(stream).await?;
         tokio::spawn(background);
-        Ok(DnsTunnel { client })
+        Ok(DnsTunneler {
+            client: Box::new(AsyncClientWrapper { client }),
+        })
     }
 }
 
 #[async_trait]
-impl Tunneler for DnsTunnel {
+impl Tunneler for DnsTunneler {
     async fn tunnel(
         &mut self,
         mut reader: Box<dyn AsyncReader>,
@@ -54,5 +89,34 @@ impl Tunneler for DnsTunnel {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio_test::io::Builder;
+
+    use super::*;
+    use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper};
+    use tokio::io;
+    use tokio::io::ErrorKind;
+
+    #[tokio::test]
+    async fn dns_failed_to_read() -> Result<(), Box<dyn Error>> {
+        let mock = MockAsyncDnsClient::new();
+        let mut tunneler = DnsTunneler {
+            client: Box::new(mock),
+        };
+
+        let tunneled_read_mock = Builder::new()
+            .read_error(io::Error::new(ErrorKind::Other, "oh no!"))
+            .build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        assert!(result.is_err());
+        Ok(())
     }
 }

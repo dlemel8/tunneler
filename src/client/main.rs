@@ -5,7 +5,7 @@ use simple_logger::SimpleLogger;
 use structopt::{clap::arg_enum, StructOpt};
 use tokio::net::{TcpListener, TcpStream};
 
-use crate::dns::DnsTunnel;
+use crate::dns::DnsTunneler;
 use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper, TcpTunneler, Tunneler};
 
 mod dns;
@@ -80,7 +80,7 @@ pub(crate) async fn new_tunneler(
 ) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
     match tunnel_type {
         TunnelType::Tcp => Ok(Box::new(TcpTunneler::new(address, port).await?)),
-        TunnelType::Dns => Ok(Box::new(DnsTunnel::new(address, port).await?)),
+        TunnelType::Dns => Ok(Box::new(DnsTunneler::new(address, port).await?)),
     }
 }
 
