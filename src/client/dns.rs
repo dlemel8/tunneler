@@ -44,7 +44,21 @@ impl AsyncDnsClient for AsyncClientWrapper {
     }
 }
 
+#[cfg_attr(test, automock)]
+trait Encoder: Send {
+    fn encode(&self, data: &[u8]) -> String;
+}
+
+struct HexEncoder {}
+
+impl Encoder for HexEncoder {
+    fn encode(&self, data: &[u8]) -> String {
+        hex::encode(data)
+    }
+}
+
 pub(crate) struct DnsTunneler {
+    encoder: Box<dyn Encoder>,
     client: Box<dyn AsyncDnsClient>,
 }
 
@@ -55,6 +69,7 @@ impl DnsTunneler {
         let (client, background) = AsyncClient::connect(stream).await?;
         tokio::spawn(background);
         Ok(DnsTunneler {
+            encoder: Box::new(HexEncoder {}),
             client: Box::new(AsyncClientWrapper { client }),
         })
     }
@@ -69,12 +84,15 @@ impl Tunneler for DnsTunneler {
     ) -> Result<(), Box<dyn Error>> {
         let mut data_to_send = vec![0; 4096]; // TODO - get max from encoder
         let size = reader.read(&mut data_to_send).await?;
-        let encoded_data_to_send = hex::encode(&data_to_send[..size]);
+        if size == 0 {
+            return Ok(());
+        }
+        let encoded_data_to_send = self.encoder.encode(&data_to_send[..size]);
         log::debug!("going to send {:?}", encoded_data_to_send);
         let response = self
             .client
             .query(
-                Name::from_str(encoded_data_to_send.as_str()).unwrap(),
+                Name::from_str(encoded_data_to_send.as_str())?,
                 DNSClass::IN,
                 RecordType::TXT,
             )
@@ -98,19 +116,74 @@ mod tests {
 
     use super::*;
     use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper};
+    use std::fmt;
     use tokio::io;
     use tokio::io::ErrorKind;
 
+    #[derive(Debug)]
+    struct TestError {}
+
+    impl fmt::Display for TestError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "bla")
+        }
+    }
+
+    impl Error for TestError {}
+
     #[tokio::test]
     async fn dns_failed_to_read() -> Result<(), Box<dyn Error>> {
-        let mock = MockAsyncDnsClient::new();
+        let encoder_mock = MockEncoder::new();
+        let client_mock = MockAsyncDnsClient::new();
         let mut tunneler = DnsTunneler {
-            client: Box::new(mock),
+            encoder: Box::new(encoder_mock),
+            client: Box::new(client_mock),
         };
 
         let tunneled_read_mock = Builder::new()
             .read_error(io::Error::new(ErrorKind::Other, "oh no!"))
             .build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dns_read_end_of_file() -> Result<(), Box<dyn Error>> {
+        let encoder_mock = MockEncoder::new();
+        let client_mock = MockAsyncDnsClient::new();
+        let mut tunneler = DnsTunneler {
+            encoder: Box::new(encoder_mock),
+            client: Box::new(client_mock),
+        };
+
+        let tunneled_read_mock = Builder::new().build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+    }
+
+    #[tokio::test]
+    async fn dns_query_failed() -> Result<(), Box<dyn Error>> {
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock.expect_encode().return_const("encoded");
+        let mut client_mock = MockAsyncDnsClient::new();
+        client_mock
+            .expect_query()
+            .returning(|_, _, _| Err(Box::new(TestError {})));
+        let mut tunneler = DnsTunneler {
+            encoder: Box::new(encoder_mock),
+            client: Box::new(client_mock),
+        };
+
+        let data: &[u8] = b"bla";
+        let tunneled_read_mock = Builder::new().read(data).build();
         let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
         let tunneled_write_mock = Builder::new().build();
         let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
