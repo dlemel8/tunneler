@@ -99,7 +99,6 @@ impl Tunneler for DnsTunneler {
             )
             .await?;
 
-
         let answers = response.answers();
         let answer = match answers.len() {
             0 => return Ok(()),
@@ -109,7 +108,9 @@ impl Tunneler for DnsTunneler {
 
         let encoded_received_data = match answer.rdata() {
             RData::TXT(text) => format!("{}", text),
-            x => return Err(format!("unexpected answer record data {}", x.to_record_type()).into()),
+            x => {
+                return Err(format!("unexpected answer record data {}", x.to_record_type()).into())
+            }
         };
         log::debug!("received {:?}", encoded_received_data);
         let data_to_write = hex::decode(encoded_received_data)?;
@@ -237,13 +238,11 @@ mod tests {
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
-        client_mock
-            .expect_query()
-            .returning(|_, _, _| {
-                let mut message = Message::new();
-                message.add_answer(Record::new()).add_answer(Record::new());
-                Ok(DnsResponse::from(message))}
-            );
+        client_mock.expect_query().returning(|_, _, _| {
+            let mut message = Message::new();
+            message.add_answer(Record::new()).add_answer(Record::new());
+            Ok(DnsResponse::from(message))
+        });
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
@@ -262,18 +261,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dns_query_returns_response_single_answer_with_wrong_type() -> Result<(), Box<dyn Error>> {
+    async fn dns_query_returns_response_single_answer_with_wrong_type() -> Result<(), Box<dyn Error>>
+    {
         let mut encoder_mock = MockEncoder::new();
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
-        client_mock
-            .expect_query()
-            .returning(|_, _, _| {
-                let mut message = Message::new();
-                message.add_answer(Record::new());
-                Ok(DnsResponse::from(message))}
-            );
+        client_mock.expect_query().returning(|_, _, _| {
+            let mut message = Message::new();
+            message.add_answer(Record::new());
+            Ok(DnsResponse::from(message))
+        });
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
