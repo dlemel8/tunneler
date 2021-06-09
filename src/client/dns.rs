@@ -87,6 +87,7 @@ impl Tunneler for DnsTunneler {
         if size == 0 {
             return Ok(());
         }
+
         let encoded_data_to_send = self.encoder.encode(&data_to_send[..size]);
         log::debug!("going to send {:?}", encoded_data_to_send);
         let response = self
@@ -97,9 +98,18 @@ impl Tunneler for DnsTunneler {
                 RecordType::TXT,
             )
             .await?;
-        let encoded_received_data = match response.answers()[0].rdata() {
+
+
+        let answers = response.answers();
+        let answer = match answers.len() {
+            0 => return Ok(()),
+            1 => &answers[0],
+            x => return Err(format!("unexpected answers count {}", x).into()),
+        };
+
+        let encoded_received_data = match answer.rdata() {
             RData::TXT(text) => format!("{}", text),
-            _ => return Err("bla".into()),
+            x => return Err(format!("unexpected answer record data {}", x.to_record_type()).into()),
         };
         log::debug!("received {:?}", encoded_received_data);
         let data_to_write = hex::decode(encoded_received_data)?;
@@ -119,6 +129,8 @@ mod tests {
     use std::fmt;
     use tokio::io;
     use tokio::io::ErrorKind;
+    use trust_dns_client::op::Message;
+    use trust_dns_client::proto::rr::Record;
 
     #[derive(Debug)]
     struct TestError {}
@@ -173,10 +185,96 @@ mod tests {
     async fn dns_query_failed() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
         encoder_mock.expect_encode().return_const("encoded");
+
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock
             .expect_query()
             .returning(|_, _, _| Err(Box::new(TestError {})));
+
+        let mut tunneler = DnsTunneler {
+            encoder: Box::new(encoder_mock),
+            client: Box::new(client_mock),
+        };
+
+        let data: &[u8] = b"bla";
+        let tunneled_read_mock = Builder::new().read(data).build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dns_query_returns_empty_response() -> Result<(), Box<dyn Error>> {
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock.expect_encode().return_const("encoded");
+
+        let mut client_mock = MockAsyncDnsClient::new();
+        client_mock
+            .expect_query()
+            .returning(|_, _, _| Ok(DnsResponse::from(Message::new())));
+
+        let mut tunneler = DnsTunneler {
+            encoder: Box::new(encoder_mock),
+            client: Box::new(client_mock),
+        };
+
+        let data: &[u8] = b"bla";
+        let tunneled_read_mock = Builder::new().read(data).build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+    }
+
+    #[tokio::test]
+    async fn dns_query_returns_response_with_multiple_answers() -> Result<(), Box<dyn Error>> {
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock.expect_encode().return_const("encoded");
+
+        let mut client_mock = MockAsyncDnsClient::new();
+        client_mock
+            .expect_query()
+            .returning(|_, _, _| {
+                let mut message = Message::new();
+                message.add_answer(Record::new()).add_answer(Record::new());
+                Ok(DnsResponse::from(message))}
+            );
+
+        let mut tunneler = DnsTunneler {
+            encoder: Box::new(encoder_mock),
+            client: Box::new(client_mock),
+        };
+
+        let data: &[u8] = b"bla";
+        let tunneled_read_mock = Builder::new().read(data).build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dns_query_returns_response_single_answer_with_wrong_type() -> Result<(), Box<dyn Error>> {
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock.expect_encode().return_const("encoded");
+
+        let mut client_mock = MockAsyncDnsClient::new();
+        client_mock
+            .expect_query()
+            .returning(|_, _, _| {
+                let mut message = Message::new();
+                message.add_answer(Record::new());
+                Ok(DnsResponse::from(message))}
+            );
+
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
             client: Box::new(client_mock),
