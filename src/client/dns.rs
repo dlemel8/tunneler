@@ -107,42 +107,44 @@ impl Tunneler for DnsTunneler {
         mut writer: Box<dyn AsyncWriter>,
     ) -> Result<(), Box<dyn Error>> {
         let mut data_to_send = vec![0; self.encoder.calculate_max_decoded_size(MAXIMUM_LABEL_SIZE)];
-        let size = reader.read(&mut data_to_send).await?;
-        if size == 0 {
-            return Ok(());
-        }
-
-        let encoded_data_to_send = self.encoder.encode(&data_to_send[..size]);
-        log::debug!("going to send {:?}", encoded_data_to_send);
-        let response = self
-            .client
-            .query(
-                Name::from_str(encoded_data_to_send.as_str())?,
-                DNSClass::IN,
-                RecordType::TXT,
-            )
-            .await?;
-
-        let answers = response.answers();
-        let answer = match answers.len() {
-            0 => return Ok(()),
-            1 => &answers[0],
-            x => return Err(format!("unexpected answers count {}", x).into()),
-        };
-
-        let encoded_received_data = match answer.rdata() {
-            RData::TXT(text) => format!("{}", text),
-            x => {
-                return Err(format!("unexpected answer record data {}", x.to_record_type()).into());
+        loop {
+            let size = reader.read(&mut data_to_send).await?;
+            if size == 0 {
+                break;
             }
-        };
 
-        log::debug!("received {:?}", encoded_received_data);
-        let data_to_write = self.decoder.decode(encoded_received_data)?;
-        match writer.write(data_to_write.as_slice()).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
+            let encoded_data_to_send = self.encoder.encode(&data_to_send[..size]);
+            log::debug!("going to send {:?}", encoded_data_to_send);
+            let response = self
+                .client
+                .query(
+                    Name::from_str(encoded_data_to_send.as_str())?,
+                    DNSClass::IN,
+                    RecordType::TXT,
+                )
+                .await?;
+
+            let answers = response.answers();
+            let answer = match answers.len() {
+                0 => return Ok(()),
+                1 => &answers[0],
+                x => return Err(format!("unexpected answers count {}", x).into()),
+            };
+
+            let encoded_received_data = match answer.rdata() {
+                RData::TXT(text) => format!("{}", text),
+                x => {
+                    return Err(
+                        format!("unexpected answer record data {}", x.to_record_type()).into(),
+                    );
+                }
+            };
+
+            log::debug!("received {:?}", encoded_received_data);
+            let data_to_write = self.decoder.decode(encoded_received_data)?;
+            writer.write(data_to_write.as_slice()).await?;
         }
+        Ok(())
     }
 }
 
@@ -448,6 +450,42 @@ mod tests {
         let tunneled_read_mock = Builder::new().read(b"bla").build();
         let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
         let tunneled_write_mock = Builder::new().write(b"decoded").build();
+        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+
+        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+    }
+
+    #[tokio::test]
+    async fn multiple_read_write() -> Result<(), Box<dyn Error>> {
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
+        encoder_mock.expect_encode().return_const("encoded");
+
+        let mut client_mock = MockAsyncDnsClient::new();
+        client_mock.expect_query().returning(|_, _, _| {
+            let mut record = Record::new();
+            record.set_rdata(RData::TXT(TXT::new(vec!["rdata".to_string()])));
+            let mut message = Message::new();
+            message.add_answer(record);
+            Ok(DnsResponse::from(message))
+        });
+
+        let mut decoder_mock = MockDecoder::new();
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Ok(String::from("decoded").into_bytes()));
+
+        let mut tunneler = DnsTunneler {
+            encoder: Box::new(encoder_mock),
+            client: Box::new(client_mock),
+            decoder: Box::new(decoder_mock),
+        };
+
+        let tunneled_read_mock = Builder::new().read(b"bla").read(b"bla").build();
+        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
+        let tunneled_write_mock = Builder::new().write(b"decoded").write(b"decoded").build();
         let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
 
         tunneler.tunnel(tunneled_reader, tunneled_writer).await
