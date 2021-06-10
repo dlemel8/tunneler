@@ -44,8 +44,11 @@ impl AsyncDnsClient for AsyncClientWrapper {
     }
 }
 
+const MAXIMUM_LABEL_SIZE: usize = 63;
+
 #[cfg_attr(test, automock)]
 trait Encoder: Send {
+    fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize;
     fn encode(&self, data: &[u8]) -> String;
 }
 
@@ -58,6 +61,9 @@ trait Decoder: Send {
 struct HexEncoder {}
 
 impl Encoder for HexEncoder {
+    fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize {
+        max_encoded_size / 2
+    }
     fn encode(&self, data: &[u8]) -> String {
         hex::encode(data)
     }
@@ -100,7 +106,7 @@ impl Tunneler for DnsTunneler {
         mut reader: Box<dyn AsyncReader>,
         mut writer: Box<dyn AsyncWriter>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut data_to_send = vec![0; 4096]; // TODO - get max from encoder
+        let mut data_to_send = vec![0; self.encoder.calculate_max_decoded_size(MAXIMUM_LABEL_SIZE)];
         let size = reader.read(&mut data_to_send).await?;
         if size == 0 {
             return Ok(());
@@ -127,7 +133,7 @@ impl Tunneler for DnsTunneler {
         let encoded_received_data = match answer.rdata() {
             RData::TXT(text) => format!("{}", text),
             x => {
-                return Err(format!("unexpected answer record data {}", x.to_record_type()).into())
+                return Err(format!("unexpected answer record data {}", x.to_record_type()).into());
             }
         };
 
@@ -142,16 +148,18 @@ impl Tunneler for DnsTunneler {
 
 #[cfg(test)]
 mod tests {
-    use tokio_test::io::Builder;
-
-    use super::*;
-    use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper};
     use std::fmt;
+
     use tokio::io;
     use tokio::io::ErrorKind;
+    use tokio_test::io::Builder;
     use trust_dns_client::op::Message;
     use trust_dns_client::proto::rr::rdata::TXT;
     use trust_dns_client::proto::rr::Record;
+
+    use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper};
+
+    use super::*;
 
     #[derive(Debug)]
     struct TestError {}
@@ -166,8 +174,14 @@ mod tests {
 
     #[tokio::test]
     async fn dns_failed_to_read() -> Result<(), Box<dyn Error>> {
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
+        encoder_mock.expect_encode().return_const("encoded");
+
         let mut tunneler = DnsTunneler {
-            encoder: Box::new(MockEncoder::new()),
+            encoder: Box::new(encoder_mock),
             client: Box::new(MockAsyncDnsClient::new()),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -186,8 +200,14 @@ mod tests {
 
     #[tokio::test]
     async fn dns_read_end_of_file() -> Result<(), Box<dyn Error>> {
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
+        encoder_mock.expect_encode().return_const("encoded");
+
         let mut tunneler = DnsTunneler {
-            encoder: Box::new(MockEncoder::new()),
+            encoder: Box::new(encoder_mock),
             client: Box::new(MockAsyncDnsClient::new()),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -203,6 +223,9 @@ mod tests {
     #[tokio::test]
     async fn dns_query_failed() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
@@ -229,6 +252,9 @@ mod tests {
     #[tokio::test]
     async fn dns_query_returns_empty_response() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
@@ -253,6 +279,9 @@ mod tests {
     #[tokio::test]
     async fn dns_query_returns_response_with_multiple_answers() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
@@ -282,6 +311,9 @@ mod tests {
     async fn dns_query_returns_response_single_answer_with_wrong_type() -> Result<(), Box<dyn Error>>
     {
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
@@ -310,6 +342,9 @@ mod tests {
     #[tokio::test]
     async fn failed_to_decode() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
@@ -345,6 +380,9 @@ mod tests {
     #[tokio::test]
     async fn failed_to_write() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
@@ -382,6 +420,9 @@ mod tests {
     #[tokio::test]
     async fn single_read_write() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         let mut client_mock = MockAsyncDnsClient::new();
