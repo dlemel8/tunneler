@@ -12,7 +12,9 @@ use trust_dns_client::proto::rr::Name;
 use trust_dns_client::rr::{DNSClass, RData, RecordType};
 use trust_dns_client::udp::UdpClientStream;
 
-use crate::tunnel::{AsyncReader, AsyncWriter, Tunneler};
+use common::io::{AsyncReader, AsyncWriter};
+
+use crate::tunnel::Tunneler;
 
 #[cfg_attr(test, automock)]
 #[async_trait]
@@ -103,22 +105,23 @@ impl DnsTunneler {
 impl Tunneler for DnsTunneler {
     async fn tunnel(
         &mut self,
-        mut reader: Box<dyn AsyncReader>,
-        mut writer: Box<dyn AsyncWriter>,
+        mut to_tunnel: Box<dyn AsyncReader>,
+        mut from_tunnel: Box<dyn AsyncWriter>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut data_to_send = vec![0; self.encoder.calculate_max_decoded_size(MAXIMUM_LABEL_SIZE)];
+        let mut data_to_tunnel =
+            vec![0; self.encoder.calculate_max_decoded_size(MAXIMUM_LABEL_SIZE)];
         loop {
-            let size = reader.read(&mut data_to_send).await?;
+            let size = to_tunnel.read(&mut data_to_tunnel).await?;
             if size == 0 {
                 break;
             }
 
-            let encoded_data_to_send = self.encoder.encode(&data_to_send[..size]);
-            log::debug!("going to send {:?}", encoded_data_to_send);
+            let encoded_data_to_tunnel = self.encoder.encode(&data_to_tunnel[..size]);
+            log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
             let response = self
                 .client
                 .query(
-                    Name::from_str(encoded_data_to_send.as_str())?,
+                    Name::from_str(encoded_data_to_tunnel.as_str())?,
                     DNSClass::IN,
                     RecordType::TXT,
                 )
@@ -140,9 +143,9 @@ impl Tunneler for DnsTunneler {
                 }
             };
 
-            log::debug!("received {:?}", encoded_received_data);
-            let data_to_write = self.decoder.decode(encoded_received_data)?;
-            writer.write(data_to_write.as_slice()).await?;
+            log::debug!("received from tunnel {:?}", encoded_received_data);
+            let data_from_tunnel = self.decoder.decode(encoded_received_data)?;
+            from_tunnel.write(data_from_tunnel.as_slice()).await?;
         }
         Ok(())
     }
@@ -159,7 +162,7 @@ mod tests {
     use trust_dns_client::proto::rr::rdata::TXT;
     use trust_dns_client::proto::rr::Record;
 
-    use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper};
+    use common::io::{AsyncReadWrapper, AsyncWriteWrapper};
 
     use super::*;
 

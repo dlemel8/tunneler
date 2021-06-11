@@ -20,6 +20,10 @@ hex = "0.4"
 tokio-test = "0.4.2"
 mockall = "0.9.1"
 
+[lib]
+name = "common"
+path = "src/common/lib.rs"
+
 [[bin]]
 name = "server"
 path = "src/server/main.rs"

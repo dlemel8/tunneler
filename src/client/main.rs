@@ -5,8 +5,10 @@ use simple_logger::SimpleLogger;
 use structopt::{clap::arg_enum, StructOpt};
 use tokio::net::{TcpListener, TcpStream};
 
+use common::io::{AsyncReadWrapper, AsyncWriteWrapper};
+
 use crate::dns::DnsTunneler;
-use crate::tunnel::{AsyncReadWrapper, AsyncWriteWrapper, TcpTunneler, Tunneler};
+use crate::tunnel::{TcpTunneler, Tunneler};
 
 mod dns;
 mod tunnel;
