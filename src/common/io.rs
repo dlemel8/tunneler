@@ -58,9 +58,10 @@ impl<W: AsyncWriteExt + Unpin + Send> AsyncWriter for AsyncWriteWrapper<W> {
     }
 }
 
-pub async fn tcp_proxy(
+pub async fn copy(
     from: &mut Box<dyn AsyncReader>,
     to: &mut Box<dyn AsyncWriter>,
+    debug_log_message: &str,
 ) -> tokio::io::Result<()> {
     let mut data_to_tunnel = vec![0; 4096];
     loop {
@@ -68,7 +69,7 @@ pub async fn tcp_proxy(
         if size == 0 {
             break;
         }
-        log::debug!("sending to tunnel {:?}", &data_to_tunnel[..size]);
+        log::debug!("{} {:?}", debug_log_message, &data_to_tunnel[..size]);
         to.write(&data_to_tunnel[..size]).await?;
     }
     to.shutdown().await

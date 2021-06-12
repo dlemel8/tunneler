@@ -4,7 +4,7 @@ use std::net::IpAddr;
 use async_trait::async_trait;
 use tokio::net::TcpStream;
 
-use common::io::{tcp_proxy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter};
+use common::io::{copy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter};
 
 #[async_trait]
 pub(crate) trait Tunneler: Send {
@@ -42,8 +42,12 @@ impl Tunneler for TcpTunneler {
         mut to_tunnel: Box<dyn AsyncReader>,
         mut from_tunnel: Box<dyn AsyncWriter>,
     ) -> Result<(), Box<dyn Error>> {
-        let to_tunnel_future = tcp_proxy(&mut to_tunnel, &mut self.to_tunnel);
-        let from_tunnel_future = tcp_proxy(&mut self.from_tunnel, &mut from_tunnel);
+        let to_tunnel_future = copy(&mut to_tunnel, &mut self.to_tunnel, "sending to tunnel");
+        let from_tunnel_future = copy(
+            &mut self.from_tunnel,
+            &mut from_tunnel,
+            "received from tunnel",
+        );
         match tokio::try_join!(to_tunnel_future, from_tunnel_future) {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
