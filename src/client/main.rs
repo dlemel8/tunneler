@@ -3,12 +3,12 @@ use std::net::IpAddr;
 
 use simple_logger::SimpleLogger;
 use structopt::{clap::arg_enum, StructOpt};
-use tokio::net::{TcpListener, TcpStream};
 
-use common::io::{AsyncReadWrapper, AsyncWriteWrapper};
+use common::io::{Client, TcpServer};
 
 use crate::dns::DnsTunneler;
 use crate::tunnel::{TcpTunneler, Tunneler};
+use async_channel::Receiver;
 
 mod dns;
 mod tunnel;
@@ -51,28 +51,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap();
     log::debug!("args are {:?}", args);
 
-    let listener_address = format!("{}:{}", args.local_address, args.local_port);
-    log::info!("start listening on {}", listener_address);
     // TODO - support both TCP and UDP?
-    let listener = TcpListener::bind(listener_address).await?;
-
-    while let Ok((in_stream, in_address)) = listener.accept().await {
-        log::debug!("got connection from {}", in_address);
-        let tunnel_type = args.tunnel_type;
-        let remote_address = args.remote_address;
-        let remote_port = args.remote_port;
-        let task = async move {
-            if let Err(e) =
-                handle_in_stream(tunnel_type, remote_address, remote_port, in_stream).await
-            {
-                log::error!("failed to handle in stream: {}", e);
-            }
-        };
-
-        tokio::spawn(task);
+    let mut server = TcpServer::new(args.local_address, args.local_port).await?;
+    let (clients_sender, clients_receiver) = async_channel::unbounded::<Client>();
+    let accept_clients_future = server.accept_clients(clients_sender);
+    let tunnel_clients_future = tunnel_clients(
+        clients_receiver,
+        args.tunnel_type,
+        args.remote_address,
+        args.remote_port,
+    );
+    match tokio::try_join!(accept_clients_future, tunnel_clients_future) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
     }
-
-    Ok(())
 }
 
 pub(crate) async fn new_tunneler(
@@ -86,16 +78,15 @@ pub(crate) async fn new_tunneler(
     }
 }
 
-async fn handle_in_stream(
+async fn tunnel_clients(
+    clients: Receiver<Client>,
     tunnel_type: TunnelType,
     remote_address: IpAddr,
     remote_port: u16,
-    in_stream: TcpStream,
 ) -> Result<(), Box<dyn Error>> {
-    let (in_read, in_write) = in_stream.into_split();
-
-    let mut tunnel = new_tunneler(tunnel_type, remote_address, remote_port).await?;
-    let reader = Box::new(AsyncReadWrapper::new(in_read));
-    let writer = Box::new(AsyncWriteWrapper::new(in_write));
-    tunnel.tunnel(reader, writer).await
+    while let Ok(client) = clients.recv().await {
+        let mut tunnel = new_tunneler(tunnel_type, remote_address, remote_port).await?;
+        tunnel.tunnel(client.reader, client.writer).await?
+    }
+    Ok(())
 }

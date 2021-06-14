@@ -1,7 +1,11 @@
 use std::io;
 
+use async_channel::Sender;
 use async_trait::async_trait;
+use std::error::Error;
+use std::net::IpAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 #[async_trait]
 pub trait AsyncReader: Send {
@@ -73,4 +77,36 @@ pub async fn copy(
         to.write(&data_to_tunnel[..size]).await?;
     }
     to.shutdown().await
+}
+
+pub struct Client {
+    pub reader: Box<dyn AsyncReader>,
+    pub writer: Box<dyn AsyncWriter>,
+}
+
+pub struct TcpServer {
+    listener: TcpListener,
+}
+
+impl TcpServer {
+    pub async fn new(local_address: IpAddr, local_port: u16) -> Result<Self, Box<dyn Error>> {
+        let listener_address = format!("{}:{}", local_address, local_port);
+        log::info!("start listening on {}", listener_address);
+        let listener = TcpListener::bind(listener_address).await?;
+        Ok(Self { listener })
+    }
+
+    pub async fn accept_clients(
+        &mut self,
+        new_clients: Sender<Client>,
+    ) -> Result<(), Box<dyn Error>> {
+        while let Ok((client_stream, client_address)) = self.listener.accept().await {
+            log::debug!("got connection from {}", client_address);
+            let (client_reader, client_writer) = client_stream.into_split();
+            let reader = Box::new(AsyncReadWrapper::new(client_reader));
+            let writer = Box::new(AsyncWriteWrapper::new(client_writer));
+            new_clients.send(Client { reader, writer }).await?;
+        }
+        Ok(())
+    }
 }

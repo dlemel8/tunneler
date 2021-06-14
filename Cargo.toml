@@ -15,6 +15,7 @@ async-trait = "0.1.50"
 trust-dns-client = { version = "*", default-features = false }
 trust-dns-server = "0.20.3"
 hex = "0.4"
+async-channel = "1.6.1"
 
 [dev-dependencies]
 tokio-test = "0.4.2"
