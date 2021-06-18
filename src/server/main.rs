@@ -1,21 +1,18 @@
-use crate::tunnel::{TcpUntunneler, Untunneler};
-use async_channel::Receiver;
-use common::io::{copy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
-use simple_logger::SimpleLogger;
-use std::array::IntoIter;
 use std::error::Error;
-use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
-use tokio::macros::support::Pin;
+
+use async_channel::Receiver;
+use simple_logger::SimpleLogger;
 use tokio::net::{TcpStream, UdpSocket};
-use trust_dns_server::authority::MessageResponseBuilder;
-use trust_dns_server::proto::op::{Header, MessageType, OpCode};
-use trust_dns_server::proto::rr::rdata::TXT;
-use trust_dns_server::proto::rr::{DNSClass, RData, Record, RecordType};
-use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
 use trust_dns_server::ServerFuture;
 
+use common::io::{AsyncReader, AsyncReadWrapper, AsyncWriter, AsyncWriteWrapper, copy, Stream};
+use dns::EchoRequestHandler;
+
+use crate::tunnel::{TcpUntunneler, Untunneler};
+
 mod tunnel;
+mod dns;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -25,8 +22,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap();
     log::debug!("start server");
 
-    tcp_server().await?;
-    dns_server().await
+    dns_server().await?;
+    tcp_server().await
 }
 
 async fn dns_server() -> Result<(), Box<dyn Error>> {
@@ -67,69 +64,5 @@ async fn tcp_server() -> Result<(), Box<dyn Error>> {
     match tokio::try_join!(untunnel_clients_future, forward_clients_future) {
         Ok(_) => Ok(()),
         Err(e) => Err(e),
-    }
-}
-
-fn new_iterator<'a>(
-    record: Option<&'a Record>,
-) -> Box<dyn Iterator<Item = &'a Record> + Send + 'a> {
-    match record {
-        None => Box::new(IntoIter::new([])),
-        Some(r) => Box::new(IntoIter::new([r])),
-    }
-}
-
-async fn echo<R: ResponseHandler>(request: Request, mut response_handle: R) {
-    let message = request.message;
-    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
-
-    let mut response_header = Header::new();
-    response_header.set_id(message.id());
-    response_header.set_op_code(OpCode::Query);
-    response_header.set_message_type(MessageType::Response);
-    response_header.set_authoritative(true);
-
-    let first_query = (&message.queries()[0]).original();
-    if first_query.query_type() != RecordType::TXT {
-        response_handle
-            .send_response(builder.build_no_records(response_header))
-            .unwrap();
-        return;
-    }
-
-    let encoded_received_data = first_query
-        .name()
-        .to_string()
-        .trim_end_matches('.')
-        .to_string();
-
-    log::debug!("received {:?}", encoded_received_data);
-    let answer = Record::new()
-        .set_rdata(RData::TXT(TXT::new(vec![encoded_received_data])))
-        .set_record_type(RecordType::TXT)
-        .set_dns_class(DNSClass::IN)
-        .clone();
-
-    let response = builder.build(
-        response_header,
-        new_iterator(Some(&answer)),
-        new_iterator(None),
-        new_iterator(None),
-        new_iterator(None),
-    );
-    response_handle.send_response(response).unwrap();
-}
-
-struct EchoRequestHandler {}
-
-impl RequestHandler for EchoRequestHandler {
-    type ResponseFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-
-    fn handle_request<R: ResponseHandler>(
-        &self,
-        request: Request,
-        response_handle: R,
-    ) -> Self::ResponseFuture {
-        Box::pin(echo(request, response_handle))
     }
 }
