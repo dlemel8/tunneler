@@ -79,7 +79,7 @@ pub async fn copy(
     to.shutdown().await
 }
 
-pub struct Client {
+pub struct Stream {
     pub reader: Box<dyn AsyncReader>,
     pub writer: Box<dyn AsyncWriter>,
 }
@@ -98,14 +98,14 @@ impl TcpServer {
 
     pub async fn accept_clients(
         &mut self,
-        new_clients: Sender<Client>,
+        new_clients: Sender<Stream>,
     ) -> Result<(), Box<dyn Error>> {
         while let Ok((client_stream, client_address)) = self.listener.accept().await {
             log::debug!("got connection from {}", client_address);
             let (client_reader, client_writer) = client_stream.into_split();
             let reader = Box::new(AsyncReadWrapper::new(client_reader));
             let writer = Box::new(AsyncWriteWrapper::new(client_writer));
-            new_clients.send(Client { reader, writer }).await?;
+            new_clients.send(Stream { reader, writer }).await?;
         }
         Ok(())
     }

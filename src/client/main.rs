@@ -4,7 +4,7 @@ use std::net::IpAddr;
 use simple_logger::SimpleLogger;
 use structopt::{clap::arg_enum, StructOpt};
 
-use common::io::{Client, TcpServer};
+use common::io::{Stream, TcpServer};
 
 use crate::dns::DnsTunneler;
 use crate::tunnel::{TcpTunneler, Tunneler};
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO - support both TCP and UDP?
     let mut server = TcpServer::new(args.local_address, args.local_port).await?;
-    let (clients_sender, clients_receiver) = async_channel::unbounded::<Client>();
+    let (clients_sender, clients_receiver) = async_channel::unbounded::<Stream>();
     let accept_clients_future = server.accept_clients(clients_sender);
     let tunnel_clients_future = tunnel_clients(
         clients_receiver,
@@ -79,7 +79,7 @@ pub(crate) async fn new_tunneler(
 }
 
 async fn tunnel_clients(
-    clients: Receiver<Client>,
+    clients: Receiver<Stream>,
     tunnel_type: TunnelType,
     remote_address: IpAddr,
     remote_port: u16,
