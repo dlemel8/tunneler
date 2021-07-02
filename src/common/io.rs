@@ -67,14 +67,14 @@ pub async fn copy(
     to: &mut Box<dyn AsyncWriter>,
     debug_log_message: &str,
 ) -> tokio::io::Result<()> {
-    let mut data_to_tunnel = vec![0; 4096];
+    let mut data = vec![0; 4096];
     loop {
-        let size = from.read(&mut data_to_tunnel).await?;
+        let size = from.read(&mut data).await?;
         if size == 0 {
             break;
         }
-        log::debug!("{} {:?}", debug_log_message, &data_to_tunnel[..size]);
-        to.write(&data_to_tunnel[..size]).await?;
+        log::debug!("{} {:?}", debug_log_message, &data[..size]);
+        to.write(&data[..size]).await?;
     }
     to.shutdown().await
 }
