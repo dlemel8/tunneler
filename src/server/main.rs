@@ -1,18 +1,17 @@
 use std::error::Error;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::IpAddr;
 
 use async_channel::Receiver;
 use simple_logger::SimpleLogger;
-use tokio::net::{TcpStream, UdpSocket};
-use trust_dns_server::ServerFuture;
+use tokio::net::TcpStream;
 
-use common::io::{AsyncReader, AsyncReadWrapper, AsyncWriter, AsyncWriteWrapper, copy, Stream};
-use dns::EchoRequestHandler;
+use common::io::{copy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
 
+use crate::dns::DnsUntunneler;
 use crate::tunnel::{TcpUntunneler, Untunneler};
 
-mod tunnel;
 mod dns;
+mod tunnel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -27,13 +26,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn dns_server() -> Result<(), Box<dyn Error>> {
-    let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8899));
-    let udp_socket = UdpSocket::bind(addr).await?;
-    let mut server = ServerFuture::new(EchoRequestHandler {});
-    server.register_socket(udp_socket);
-    match server.block_until_done().await {
+    let mut untunneler = DnsUntunneler::new("127.0.0.1".parse()?, 8899).await?;
+    let (untunneled_sender, untunneled_receiver) = async_channel::unbounded::<Stream>();
+    let untunnel_clients_future = untunneler.untunnel(untunneled_sender);
+    let forward_clients_future = forward_clients(untunneled_receiver, "127.0.0.1".parse()?, 8080);
+    match tokio::try_join!(untunnel_clients_future, forward_clients_future) {
         Ok(_) => Ok(()),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(e),
     }
 }
 
