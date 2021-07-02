@@ -59,7 +59,7 @@ impl Untunneler for DnsUntunneler {
         };
 
         let udp_socket = UdpSocket::bind(self.listener_address).await?;
-        let mut server = ServerFuture::new(EchoRequestHandler::new(local_stream));
+        let mut server = ServerFuture::new(UntunnelRequestHandler::new(local_stream));
         server.register_socket(udp_socket);
         match server.block_until_done().await {
             Ok(_) => Ok(()),
@@ -79,16 +79,35 @@ impl Untunneler for DnsUntunneler {
 //     }
 // }
 
-fn new_iterator<'a>(
-    record: Option<&'a Record>,
-) -> Box<dyn Iterator<Item = &'a Record> + Send + 'a> {
-    match record {
-        None => Box::new(IntoIter::new([])),
-        Some(r) => Box::new(IntoIter::new([r])),
+pub struct UntunnelRequestHandler {
+    untunneled_client: Arc<Mutex<Stream>>,
+}
+
+impl UntunnelRequestHandler {
+    pub(crate) fn new(client_stream: Stream) -> Self {
+        Self {
+            untunneled_client: Arc::new(Mutex::new(client_stream)),
+        }
     }
 }
 
-async fn echo<R: ResponseHandler>(
+impl RequestHandler for UntunnelRequestHandler {
+    type ResponseFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    fn handle_request<R: ResponseHandler>(
+        &self,
+        request: Request,
+        response_handle: R,
+    ) -> Self::ResponseFuture {
+        Box::pin(untunnel_request(
+            request,
+            response_handle,
+            self.untunneled_client.clone(),
+        ))
+    }
+}
+
+async fn untunnel_request<R: ResponseHandler>(
     request: Request,
     mut response_handle: R,
     untunneled_client: Arc<Mutex<Stream>>,
@@ -121,6 +140,7 @@ async fn echo<R: ResponseHandler>(
     let mut locked_client = untunneled_client.lock().await;
     if let Err(e) = locked_client.writer.write(received_data).await {
         log::error!("failed to write to client: {}", e);
+        // TODO - send error
         return;
     };
 
@@ -129,6 +149,7 @@ async fn echo<R: ResponseHandler>(
         Ok(s) => s,
         Err(e) => {
             log::error!("failed to read from client: {}", e);
+            // TODO - send error
             return;
         }
     };
@@ -151,30 +172,11 @@ async fn echo<R: ResponseHandler>(
     response_handle.send_response(response).unwrap();
 }
 
-pub struct EchoRequestHandler {
-    untunneled_client: Arc<Mutex<Stream>>,
-}
-
-impl EchoRequestHandler {
-    pub(crate) fn new(client_stream: Stream) -> Self {
-        Self {
-            untunneled_client: Arc::new(Mutex::new(client_stream)),
-        }
-    }
-}
-
-impl RequestHandler for EchoRequestHandler {
-    type ResponseFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-
-    fn handle_request<R: ResponseHandler>(
-        &self,
-        request: Request,
-        response_handle: R,
-    ) -> Self::ResponseFuture {
-        Box::pin(echo(
-            request,
-            response_handle,
-            self.untunneled_client.clone(),
-        ))
+fn new_iterator<'a>(
+    record: Option<&'a Record>,
+) -> Box<dyn Iterator<Item = &'a Record> + Send + 'a> {
+    match record {
+        None => Box::new(IntoIter::new([])),
+        Some(r) => Box::new(IntoIter::new([r])),
     }
 }
