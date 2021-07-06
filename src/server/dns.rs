@@ -1,26 +1,26 @@
 use std::array::IntoIter;
 use std::error::Error;
 use std::future::Future;
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
-
-use async_trait::async_trait;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use async_channel::Sender;
+use async_trait::async_trait;
+use tokio::io::{duplex, split};
+use tokio::net::UdpSocket;
 use trust_dns_client::op::{Header, MessageType, OpCode};
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
 use trust_dns_server::authority::MessageResponseBuilder;
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
+use trust_dns_server::ServerFuture;
 
 use common::io::{AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
 
+use crate::io::StreamsCache;
 use crate::tunnel::Untunneler;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
-use tokio::io::{duplex, split};
-use tokio::net::UdpSocket;
-use tokio::sync::Mutex;
-use trust_dns_server::ServerFuture;
 
 pub(crate) struct DnsUntunneler {
     listener_address: SocketAddr,
@@ -39,27 +39,29 @@ impl DnsUntunneler {
 #[async_trait(? Send)]
 impl Untunneler for DnsUntunneler {
     async fn untunnel(&mut self, new_clients: Sender<Stream>) -> Result<(), Box<dyn Error>> {
-        let (local, remote) = duplex(4096);
+        let cache = StreamsCache::new(move || {
+            let (local, remote) = duplex(4096);
 
-        let (remote_reader, remote_writer) = split(remote);
-        let from_remote: Box<dyn AsyncReader> = Box::new(AsyncReadWrapper::new(remote_reader));
-        let to_remote: Box<dyn AsyncWriter> = Box::new(AsyncWriteWrapper::new(remote_writer));
-        let remote_stream = Stream {
-            reader: from_remote,
-            writer: to_remote,
-        };
-        new_clients.send(remote_stream).await?;
+            let (remote_reader, remote_writer) = split(remote);
+            let from_remote: Box<dyn AsyncReader> = Box::new(AsyncReadWrapper::new(remote_reader));
+            let to_remote: Box<dyn AsyncWriter> = Box::new(AsyncWriteWrapper::new(remote_writer));
+            let remote_stream = Stream {
+                reader: from_remote,
+                writer: to_remote,
+            };
+            new_clients.try_send(remote_stream)?;
 
-        let (local_reader, local_writer) = split(local);
-        let from_local: Box<dyn AsyncReader> = Box::new(AsyncReadWrapper::new(local_reader));
-        let to_local: Box<dyn AsyncWriter> = Box::new(AsyncWriteWrapper::new(local_writer));
-        let local_stream = Stream {
-            reader: from_local,
-            writer: to_local,
-        };
+            let (local_reader, local_writer) = split(local);
+            let from_local: Box<dyn AsyncReader> = Box::new(AsyncReadWrapper::new(local_reader));
+            let to_local: Box<dyn AsyncWriter> = Box::new(AsyncWriteWrapper::new(local_writer));
+            Ok(Stream {
+                reader: from_local,
+                writer: to_local,
+            })
+        });
 
         let udp_socket = UdpSocket::bind(self.listener_address).await?;
-        let mut server = ServerFuture::new(UntunnelRequestHandler::new(local_stream));
+        let mut server = ServerFuture::new(UntunnelRequestHandler::new(cache));
         server.register_socket(udp_socket);
         match server.block_until_done().await {
             Ok(_) => Ok(()),
@@ -68,30 +70,21 @@ impl Untunneler for DnsUntunneler {
     }
 }
 
-// struct A {
-//     client_streams: HashMap<SocketAddrV4, Stream>,
-// }
-//
-// impl A {
-//     fn new() -> Self {
-//         let mut contacts: HashMap<SocketAddrV4, Stream> = HashMap::new();
-//         Self{}
-//     }
-// }
-
-pub struct UntunnelRequestHandler {
-    untunneled_client: Arc<Mutex<Stream>>,
+pub struct UntunnelRequestHandler<F: Fn() -> Result<Stream, Box<dyn Error>>> {
+    untunneled_clients: Arc<Mutex<StreamsCache<F, SocketAddr>>>,
 }
 
-impl UntunnelRequestHandler {
-    pub(crate) fn new(client_stream: Stream) -> Self {
+impl<F: Fn() -> Result<Stream, Box<dyn Error>>> UntunnelRequestHandler<F> {
+    pub(crate) fn new(cache: StreamsCache<F, SocketAddr>) -> Self {
         Self {
-            untunneled_client: Arc::new(Mutex::new(client_stream)),
+            untunneled_clients: Arc::new(Mutex::new(cache)),
         }
     }
 }
 
-impl RequestHandler for UntunnelRequestHandler {
+impl<F: Fn() -> Result<Stream, Box<dyn Error>> + Send + 'static> RequestHandler
+    for UntunnelRequestHandler<F>
+{
     type ResponseFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
     fn handle_request<R: ResponseHandler>(
@@ -102,15 +95,18 @@ impl RequestHandler for UntunnelRequestHandler {
         Box::pin(untunnel_request(
             request,
             response_handle,
-            self.untunneled_client.clone(),
+            self.untunneled_clients.clone(),
         ))
     }
 }
 
-async fn untunnel_request<R: ResponseHandler>(
+async fn untunnel_request<
+    R: ResponseHandler,
+    F: Fn() -> Result<Stream, Box<dyn Error>> + 'static,
+>(
     request: Request,
     mut response_handle: R,
-    untunneled_client: Arc<Mutex<Stream>>,
+    untunneled_clients: Arc<Mutex<StreamsCache<F, SocketAddr>>>,
 ) {
     let message = request.message;
     let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
@@ -137,7 +133,9 @@ async fn untunnel_request<R: ResponseHandler>(
 
     log::debug!("received from tunnel {:?}", encoded_received_data);
     let received_data = encoded_received_data.as_bytes();
-    let mut locked_client = untunneled_client.lock().await;
+    let addr = request.src;
+    let client = get_client_stream(untunneled_clients, addr).await.unwrap();
+    let mut locked_client = client.lock().await;
     if let Err(e) = locked_client.writer.write(received_data).await {
         log::error!("failed to write to client: {}", e);
         // TODO - send error
@@ -170,6 +168,14 @@ async fn untunnel_request<R: ResponseHandler>(
         new_iterator(None),
     );
     response_handle.send_response(response).unwrap();
+}
+
+async fn get_client_stream<F: Fn() -> Result<Stream, Box<dyn Error>>>(
+    untunneled_clients: Arc<Mutex<StreamsCache<F, SocketAddr>>>,
+    address: SocketAddr,
+) -> Result<Arc<Mutex<Stream>>, Box<dyn Error>> {
+    let mut locked_untunneled_clients = untunneled_clients.lock().await;
+    locked_untunneled_clients.get(address)
 }
 
 fn new_iterator<'a>(

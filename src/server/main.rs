@@ -11,6 +11,7 @@ use crate::dns::DnsUntunneler;
 use crate::tunnel::{TcpUntunneler, Untunneler};
 
 mod dns;
+mod io;
 mod tunnel;
 
 #[tokio::main]
