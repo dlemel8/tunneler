@@ -135,15 +135,14 @@ async fn untunnel_request<
     let received_data = encoded_received_data.as_bytes();
     let addr = request.src;
     let client = get_client_stream(untunneled_clients, addr).await.unwrap();
-    let mut locked_client = client.lock().await;
-    if let Err(e) = locked_client.writer.write(received_data).await {
+    if let Err(e) = client.lock().await.writer.write(received_data).await {
         log::error!("failed to write to client: {}", e);
         // TODO - send error
         return;
     };
 
     let mut data_to_tunnel = vec![0; 4096];
-    let size = match locked_client.reader.read(&mut data_to_tunnel).await {
+    let size = match client.lock().await.reader.read(&mut data_to_tunnel).await {
         Ok(s) => s,
         Err(e) => {
             log::error!("failed to read from client: {}", e);
