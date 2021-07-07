@@ -4,7 +4,6 @@ use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -71,18 +70,18 @@ impl Untunneler for DnsUntunneler {
 }
 
 pub struct UntunnelRequestHandler<F: Fn() -> Result<Stream, Box<dyn Error>>> {
-    untunneled_clients: Arc<Mutex<StreamsCache<F, SocketAddr>>>,
+    untunneled_clients: Arc<StreamsCache<F, SocketAddr>>,
 }
 
 impl<F: Fn() -> Result<Stream, Box<dyn Error>>> UntunnelRequestHandler<F> {
     pub(crate) fn new(cache: StreamsCache<F, SocketAddr>) -> Self {
         Self {
-            untunneled_clients: Arc::new(Mutex::new(cache)),
+            untunneled_clients: Arc::new(cache),
         }
     }
 }
 
-impl<F: Fn() -> Result<Stream, Box<dyn Error>> + Send + 'static> RequestHandler
+impl<F: Fn() -> Result<Stream, Box<dyn Error>> + Send + Sync + 'static> RequestHandler
     for UntunnelRequestHandler<F>
 {
     type ResponseFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -106,7 +105,7 @@ async fn untunnel_request<
 >(
     request: Request,
     mut response_handle: R,
-    untunneled_clients: Arc<Mutex<StreamsCache<F, SocketAddr>>>,
+    untunneled_clients: Arc<StreamsCache<F, SocketAddr>>,
 ) {
     let message = request.message;
     let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
@@ -133,8 +132,7 @@ async fn untunnel_request<
 
     log::debug!("received from tunnel {:?}", encoded_received_data);
     let received_data = encoded_received_data.as_bytes();
-    let addr = request.src;
-    let client = get_client_stream(untunneled_clients, addr).await.unwrap();
+    let client = untunneled_clients.get(request.src).unwrap();
     if let Err(e) = client.lock().await.writer.write(received_data).await {
         log::error!("failed to write to client: {}", e);
         // TODO - send error
@@ -167,14 +165,6 @@ async fn untunnel_request<
         new_iterator(None),
     );
     response_handle.send_response(response).unwrap();
-}
-
-async fn get_client_stream<F: Fn() -> Result<Stream, Box<dyn Error>>>(
-    untunneled_clients: Arc<Mutex<StreamsCache<F, SocketAddr>>>,
-    address: SocketAddr,
-) -> Result<Arc<Mutex<Stream>>, Box<dyn Error>> {
-    let mut locked_untunneled_clients = untunneled_clients.lock().await;
-    locked_untunneled_clients.get(address)
 }
 
 fn new_iterator<'a>(
