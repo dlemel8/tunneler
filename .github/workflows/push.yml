@@ -12,8 +12,8 @@ jobs:
       - name: Install linters
         run: rustup component add clippy rustfmt
       - name: Clippy
-        run: cargo clippy --version && cargo clippy -- -D warnings
+        run: cargo clippy --version && cargo clippy -- -D warnings -A clippy::single-component-path-imports
       - name: Rustfmt
-        run: cargo fmt --version && cargo clippy -- -D warnings -A clippy::single-component-path-imports
+        run: cargo fmt --version && cargo fmt --all -- --check
       - name: Run tests
         run: cargo test --all-targets
