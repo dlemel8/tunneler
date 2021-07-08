@@ -12,6 +12,7 @@ use trust_dns_client::proto::rr::Name;
 use trust_dns_client::rr::{DNSClass, RData, RecordType};
 use trust_dns_client::udp::UdpClientStream;
 
+use common::dns::{Decoder, Encoder, HexEncoder};
 use common::io::{AsyncReader, AsyncWriter};
 
 use crate::tunnel::Tunneler;
@@ -47,38 +48,6 @@ impl AsyncDnsClient for AsyncClientWrapper {
 }
 
 const MAXIMUM_LABEL_SIZE: usize = 63;
-
-#[cfg_attr(test, automock)]
-trait Encoder: Send {
-    fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize;
-    fn encode(&self, data: &[u8]) -> String;
-}
-
-#[cfg_attr(test, automock)]
-trait Decoder: Send {
-    fn decode(&self, data: String) -> Result<Vec<u8>, Box<dyn Error>>;
-}
-
-#[derive(Clone, Copy)]
-struct HexEncoder {}
-
-impl Encoder for HexEncoder {
-    fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize {
-        max_encoded_size / 2
-    }
-    fn encode(&self, data: &[u8]) -> String {
-        hex::encode(data)
-    }
-}
-
-impl Decoder for HexEncoder {
-    fn decode(&self, data: String) -> Result<Vec<u8>, Box<dyn Error>> {
-        match hex::decode(data) {
-            Ok(v) => Ok(v),
-            Err(e) => Err(e.into()),
-        }
-    }
-}
 
 pub(crate) struct DnsTunneler {
     encoder: Box<dyn Encoder>,
@@ -155,6 +124,7 @@ impl Tunneler for DnsTunneler {
 mod tests {
     use std::fmt;
 
+    use mockall::mock;
     use tokio::io;
     use tokio::io::ErrorKind;
     use tokio_test::io::Builder;
@@ -165,6 +135,21 @@ mod tests {
     use common::io::{AsyncReadWrapper, AsyncWriteWrapper};
 
     use super::*;
+
+    mock! {
+        Encoder{}
+        impl Encoder for Encoder {
+            fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize;
+            fn encode(&self, data: &[u8]) -> String;
+        }
+    }
+
+    mock! {
+        Decoder{}
+        impl Decoder for Decoder {
+            fn decode(&self, data: String) -> Result<Vec<u8>, Box<dyn Error>>;
+        }
+    }
 
     #[derive(Debug)]
     struct TestError {}
