@@ -1,3 +1,4 @@
+#![allow(clippy::single_component_path_imports)]
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
