@@ -18,7 +18,7 @@ use trust_dns_server::ServerFuture;
 
 use common::io::{AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
 
-use crate::io::StreamsCache;
+use crate::io::{StreamCreator, StreamsCache};
 use crate::tunnel::Untunneler;
 
 pub(crate) struct DnsUntunneler {
@@ -69,11 +69,11 @@ impl Untunneler for DnsUntunneler {
     }
 }
 
-pub struct UntunnelRequestHandler<F: Fn() -> Result<Stream, Box<dyn Error>>> {
+pub struct UntunnelRequestHandler<F: StreamCreator> {
     untunneled_clients: Arc<StreamsCache<F, SocketAddr>>,
 }
 
-impl<F: Fn() -> Result<Stream, Box<dyn Error>>> UntunnelRequestHandler<F> {
+impl<F: StreamCreator> UntunnelRequestHandler<F> {
     pub(crate) fn new(cache: StreamsCache<F, SocketAddr>) -> Self {
         Self {
             untunneled_clients: Arc::new(cache),
@@ -81,9 +81,7 @@ impl<F: Fn() -> Result<Stream, Box<dyn Error>>> UntunnelRequestHandler<F> {
     }
 }
 
-impl<F: Fn() -> Result<Stream, Box<dyn Error>> + Send + Sync + 'static> RequestHandler
-    for UntunnelRequestHandler<F>
-{
+impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
     type ResponseFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
     fn handle_request<R: ResponseHandler>(
@@ -99,10 +97,7 @@ impl<F: Fn() -> Result<Stream, Box<dyn Error>> + Send + Sync + 'static> RequestH
     }
 }
 
-async fn untunnel_request<
-    R: ResponseHandler,
-    F: Fn() -> Result<Stream, Box<dyn Error>> + 'static,
->(
+async fn untunnel_request<R: ResponseHandler, F: StreamCreator>(
     request: Request,
     mut response_handle: R,
     untunneled_clients: Arc<StreamsCache<F, SocketAddr>>,

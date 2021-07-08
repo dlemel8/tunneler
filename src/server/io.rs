@@ -14,17 +14,20 @@ use tokio;
 pub trait CacheKey: Eq + Hash + Debug {}
 impl<T: Eq + Hash + Debug> CacheKey for T {}
 
+pub trait StreamCreator: Fn() -> Result<Stream, Box<dyn Error>> + Send + Sync + 'static {}
+impl<T: Fn() -> Result<Stream, Box<dyn Error>> + Send + Sync + 'static> StreamCreator for T {}
+
 struct CacheEntry {
     stream: Arc<tokio::sync::Mutex<Stream>>,
     last_activity: Instant,
 }
 
-pub(crate) struct StreamsCache<F: Fn() -> Result<Stream, Box<dyn Error>>, K: CacheKey> {
+pub(crate) struct StreamsCache<F: StreamCreator, K: CacheKey> {
     new_stream_creator: F,
     entries: std::sync::Mutex<HashMap<K, CacheEntry>>,
 }
 
-impl<F: Fn() -> Result<Stream, Box<dyn Error>>, K: CacheKey> StreamsCache<F, K> {
+impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
     pub(crate) fn new(new_stream_creator: F) -> Self {
         Self {
             new_stream_creator,
