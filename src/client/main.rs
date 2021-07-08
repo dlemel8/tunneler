@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::net::IpAddr;
 
+use async_channel::Receiver;
 use simple_logger::SimpleLogger;
 use structopt::{clap::arg_enum, StructOpt};
 
@@ -8,7 +9,6 @@ use common::io::{Stream, TcpServer};
 
 use crate::dns::DnsTunneler;
 use crate::tunnel::{TcpTunneler, Tunneler};
-use async_channel::Receiver;
 
 mod dns;
 mod tunnel;

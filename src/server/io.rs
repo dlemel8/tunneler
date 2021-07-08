@@ -1,14 +1,14 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::error::Error;
+use std::fmt::Debug;
 use std::hash::Hash;
+use std::sync::Arc;
 
+use tokio;
 use tokio::time::Instant;
 
 use common::io::Stream;
-use std::error::Error;
-use std::fmt::Debug;
-use std::sync::Arc;
-use tokio;
 
 pub trait CacheKey: Eq + Hash + Debug {}
 impl<T: Eq + Hash + Debug> CacheKey for T {}

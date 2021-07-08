@@ -1,9 +1,9 @@
+use std::error::Error;
 use std::io;
+use std::net::IpAddr;
 
 use async_channel::Sender;
 use async_trait::async_trait;
-use std::error::Error;
-use std::net::IpAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
