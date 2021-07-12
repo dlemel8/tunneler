@@ -12,7 +12,9 @@ use trust_dns_client::proto::rr::Name;
 use trust_dns_client::rr::{DNSClass, RData, RecordType};
 use trust_dns_client::udp::UdpClientStream;
 
-use common::dns::{Decoder, Encoder, HexEncoder};
+use common::dns::{
+    new_client_id, ClientId, ClientIdSuffixEncoder, Decoder, Encoder, HexDecoder, HexEncoder,
+};
 use common::io::{AsyncReader, AsyncWriter};
 
 use crate::tunnel::Tunneler;
@@ -51,6 +53,7 @@ const MAXIMUM_LABEL_SIZE: usize = 63;
 
 pub(crate) struct DnsTunneler {
     encoder: Box<dyn Encoder>,
+    client_id: ClientId,
     client: Box<dyn AsyncDnsClient>,
     decoder: Box<dyn Decoder>,
 }
@@ -61,11 +64,11 @@ impl DnsTunneler {
         let stream = UdpClientStream::<UdpSocket>::new(socket);
         let (client, background) = AsyncClient::connect(stream).await?;
         tokio::spawn(background);
-        let encoder = HexEncoder {};
         Ok(DnsTunneler {
-            encoder: Box::new(encoder),
+            encoder: Box::new(ClientIdSuffixEncoder::new(HexEncoder {})),
+            client_id: new_client_id(),
             client: Box::new(AsyncClientWrapper { client }),
-            decoder: Box::new(encoder),
+            decoder: Box::new(HexDecoder {}),
         })
     }
 }
@@ -80,10 +83,13 @@ impl Tunneler for DnsTunneler {
         let mut data_to_tunnel =
             vec![0; self.encoder.calculate_max_decoded_size(MAXIMUM_LABEL_SIZE)];
         loop {
-            let size = to_tunnel.read(&mut data_to_tunnel).await?;
+            let mut size = to_tunnel.read(&mut data_to_tunnel).await?;
             if size == 0 {
                 break;
             }
+
+            data_to_tunnel[size..size + self.client_id.len()].copy_from_slice(&self.client_id);
+            size += self.client_id.len();
 
             let encoded_data_to_tunnel = self.encoder.encode(&data_to_tunnel[..size]);
             log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
@@ -113,7 +119,7 @@ impl Tunneler for DnsTunneler {
             };
 
             log::debug!("received from tunnel {:?}", encoded_received_data);
-            let data_from_tunnel = self.decoder.decode(encoded_received_data)?;
+            let data_from_tunnel = self.decoder.decode(&encoded_received_data)?;
             from_tunnel.write(data_from_tunnel.as_slice()).await?;
         }
         Ok(())
@@ -147,7 +153,7 @@ mod tests {
     mock! {
         Decoder{}
         impl Decoder for Decoder {
-            fn decode(&self, data: String) -> Result<Vec<u8>, Box<dyn Error>>;
+            fn decode(&self, data: &str) -> Result<Vec<u8>, Box<dyn Error>>;
         }
     }
 
@@ -172,6 +178,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(MockAsyncDnsClient::new()),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -198,6 +205,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(MockAsyncDnsClient::new()),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -225,6 +233,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -254,6 +263,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -283,6 +293,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -315,6 +326,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
         };
@@ -353,6 +365,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
         };
@@ -391,6 +404,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
         };
@@ -431,6 +445,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
         };
@@ -467,6 +482,7 @@ mod tests {
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
+            client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
         };

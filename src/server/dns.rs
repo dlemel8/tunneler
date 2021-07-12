@@ -20,6 +20,11 @@ use common::io::{AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, 
 
 use crate::io::{StreamCreator, StreamsCache};
 use crate::tunnel::Untunneler;
+use common::dns::{
+    ClientId, ClientIdSuffixDecoder, Decoder, Encoder, HexDecoder, HexEncoder,
+    CLIENT_ID_SIZE_IN_BYTES,
+};
+use std::convert::TryInto;
 
 pub(crate) struct DnsUntunneler {
     listener_address: SocketAddr,
@@ -70,11 +75,11 @@ impl Untunneler for DnsUntunneler {
 }
 
 pub struct UntunnelRequestHandler<F: StreamCreator> {
-    untunneled_clients: Arc<StreamsCache<F, SocketAddr>>,
+    untunneled_clients: Arc<StreamsCache<F, ClientId>>,
 }
 
 impl<F: StreamCreator> UntunnelRequestHandler<F> {
-    pub(crate) fn new(cache: StreamsCache<F, SocketAddr>) -> Self {
+    pub(crate) fn new(cache: StreamsCache<F, ClientId>) -> Self {
         Self {
             untunneled_clients: Arc::new(cache),
         }
@@ -93,14 +98,18 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
             request,
             response_handle,
             self.untunneled_clients.clone(),
+            ClientIdSuffixDecoder::new(HexDecoder {}),
+            HexEncoder {},
         ))
     }
 }
 
-async fn untunnel_request<R: ResponseHandler, F: StreamCreator>(
+async fn untunnel_request<R: ResponseHandler, F: StreamCreator, D: Decoder, E: Encoder>(
     request: Request,
     mut response_handle: R,
-    untunneled_clients: Arc<StreamsCache<F, SocketAddr>>,
+    untunneled_clients: Arc<StreamsCache<F, ClientId>>,
+    decoder: D,
+    encoder: E,
 ) {
     let message = request.message;
     let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
@@ -126,8 +135,12 @@ async fn untunnel_request<R: ResponseHandler, F: StreamCreator>(
         .to_string();
 
     log::debug!("received from tunnel {:?}", encoded_received_data);
-    let received_data = encoded_received_data.as_bytes();
-    let client = untunneled_clients.get(request.src).unwrap();
+    let received_data = decoder.decode(&encoded_received_data).unwrap();
+    let (received_data, client_id) =
+        received_data.split_at(received_data.len() - CLIENT_ID_SIZE_IN_BYTES);
+    let client = untunneled_clients
+        .get(client_id.try_into().unwrap())
+        .unwrap();
     if let Err(e) = client.lock().await.writer.write(received_data).await {
         log::error!("failed to write to client: {}", e);
         // TODO - send error
@@ -144,7 +157,7 @@ async fn untunnel_request<R: ResponseHandler, F: StreamCreator>(
         }
     };
 
-    let encoded_data_to_tunnel = String::from_utf8_lossy(&data_to_tunnel[..size]).into();
+    let encoded_data_to_tunnel = encoder.encode(&data_to_tunnel[..size]);
     log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
     let answer = Record::new()
         .set_rdata(RData::TXT(TXT::new(vec![encoded_data_to_tunnel])))
