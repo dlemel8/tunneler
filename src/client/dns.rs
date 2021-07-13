@@ -81,53 +81,72 @@ impl Tunneler for DnsTunneler {
         mut from_tunnel: Box<dyn AsyncWriter>,
     ) -> Result<(), Box<dyn Error>> {
         let mut data_to_tunnel = vec![0; MAXIMUM_LABEL_SIZE];
-        let max_decoded_size = self
+        let read_limit = self
             .encoder
             .calculate_max_decoded_size(data_to_tunnel.len());
 
         loop {
-            let mut size = to_tunnel
-                .read(&mut data_to_tunnel[..max_decoded_size])
-                .await?;
-            if size == 0 {
-                break;
-            }
-
-            data_to_tunnel[size..size + self.client_id.len()].copy_from_slice(&self.client_id);
-            size += self.client_id.len();
+            let size = match self
+                .read_data_to_tunnel(&mut to_tunnel, &mut data_to_tunnel, read_limit)
+                .await?
+            {
+                0 => break,
+                x => x,
+            };
 
             let encoded_data_to_tunnel = self.encoder.encode(&data_to_tunnel[..size]);
             log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
-            let response = self
-                .client
-                .query(
-                    Name::from_str(encoded_data_to_tunnel.as_str())?,
-                    DNSClass::IN,
-                    RecordType::TXT,
-                )
-                .await?;
-
-            let answers = response.answers();
-            let answer = match answers.len() {
-                0 => return Ok(()),
-                1 => &answers[0],
-                x => return Err(format!("unexpected answers count {}", x).into()),
-            };
-
-            let encoded_received_data = match answer.rdata() {
-                RData::TXT(text) => format!("{}", text),
-                x => {
-                    return Err(
-                        format!("unexpected answer record data {}", x.to_record_type()).into(),
-                    );
-                }
-            };
+            let encoded_received_data = self.send_dns_query(encoded_data_to_tunnel).await?;
 
             log::debug!("received from tunnel {:?}", encoded_received_data);
             let data_from_tunnel = self.decoder.decode(&encoded_received_data)?;
             from_tunnel.write(data_from_tunnel.as_slice()).await?;
         }
         Ok(())
+    }
+}
+
+impl DnsTunneler {
+    async fn read_data_to_tunnel(
+        &mut self,
+        to_tunnel: &mut Box<dyn AsyncReader>,
+        data_to_tunnel: &mut Vec<u8>,
+        max_decoded_size: usize,
+    ) -> Result<usize, Box<dyn Error>> {
+        let size = to_tunnel
+            .read(&mut data_to_tunnel[..max_decoded_size])
+            .await?;
+        if size == 0 {
+            return Ok(0);
+        }
+
+        data_to_tunnel[size..size + self.client_id.len()].copy_from_slice(&self.client_id);
+        Ok(size + self.client_id.len())
+    }
+
+    async fn send_dns_query(
+        &mut self,
+        encoded_data_to_tunnel: String,
+    ) -> Result<String, Box<dyn Error>> {
+        let response = self
+            .client
+            .query(
+                Name::from_str(encoded_data_to_tunnel.as_str())?,
+                DNSClass::IN,
+                RecordType::TXT,
+            )
+            .await?;
+
+        let answers = response.answers();
+        let answer = match answers.len() {
+            1 => &answers[0],
+            x => return Err(format!("unexpected answers count {}", x).into()),
+        };
+
+        match answer.rdata() {
+            RData::TXT(text) => Ok(format!("{}", text)),
+            x => Err(format!("unexpected answer record data {}", x.to_record_type()).into()),
+        }
     }
 }
 
@@ -278,7 +297,9 @@ mod tests {
         let tunneled_write_mock = Builder::new().build();
         let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        assert!(result.is_err());
+        Ok(())
     }
 
     #[tokio::test]
