@@ -80,10 +80,15 @@ impl Tunneler for DnsTunneler {
         mut to_tunnel: Box<dyn AsyncReader>,
         mut from_tunnel: Box<dyn AsyncWriter>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut data_to_tunnel =
-            vec![0; self.encoder.calculate_max_decoded_size(MAXIMUM_LABEL_SIZE)];
+        let mut data_to_tunnel = vec![0; MAXIMUM_LABEL_SIZE];
+        let max_decoded_size = self
+            .encoder
+            .calculate_max_decoded_size(data_to_tunnel.len());
+
         loop {
-            let mut size = to_tunnel.read(&mut data_to_tunnel).await?;
+            let mut size = to_tunnel
+                .read(&mut data_to_tunnel[..max_decoded_size])
+                .await?;
             if size == 0 {
                 break;
             }
