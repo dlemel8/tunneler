@@ -86,13 +86,12 @@ impl Tunneler for DnsTunneler {
             .calculate_max_decoded_size(data_to_tunnel.len());
 
         loop {
-            let size = match self
+            let size = self
                 .read_data_to_tunnel(&mut to_tunnel, &mut data_to_tunnel, read_limit)
-                .await?
-            {
-                0 => break,
-                x => x,
-            };
+                .await?;
+            if size == 0 {
+                break;
+            }
 
             let encoded_data_to_tunnel = self.encoder.encode(&data_to_tunnel[..size]);
             log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
