@@ -1,30 +1,33 @@
 use std::array::IntoIter;
+use std::convert::TryInto;
 use std::error::Error;
 use std::future::Future;
+use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use async_channel::Sender;
 use async_trait::async_trait;
+#[cfg(test)]
+use mockall::automock;
 use tokio::io::{duplex, split};
 use tokio::net::UdpSocket;
 use trust_dns_client::op::{Header, MessageType, OpCode};
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
-use trust_dns_server::authority::MessageResponseBuilder;
+use trust_dns_server::authority::{MessageResponse, MessageResponseBuilder};
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
 use trust_dns_server::ServerFuture;
 
-use common::io::{AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
-
-use crate::io::{StreamCreator, StreamsCache};
-use crate::tunnel::Untunneler;
 use common::dns::{
     ClientId, ClientIdSuffixDecoder, Decoder, Encoder, HexDecoder, HexEncoder,
     CLIENT_ID_SIZE_IN_BYTES,
 };
-use std::convert::TryInto;
+use common::io::{AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
+
+use crate::io::{StreamCreator, StreamsCache};
+use crate::tunnel::Untunneler;
 
 pub(crate) struct DnsUntunneler {
     listener_address: SocketAddr,
@@ -74,6 +77,22 @@ impl Untunneler for DnsUntunneler {
     }
 }
 
+#[cfg_attr(test, automock)]
+pub(crate) trait DnsResponseHandler {
+    #[allow(clippy::needless_lifetimes)]
+    fn send_response<'a, 'b>(&mut self, response: MessageResponse<'a, 'b>) -> io::Result<()>;
+}
+
+struct ResponseHandlerWrapper<R: ResponseHandler> {
+    handler: R,
+}
+
+impl<R: ResponseHandler> DnsResponseHandler for ResponseHandlerWrapper<R> {
+    fn send_response(&mut self, response: MessageResponse) -> io::Result<()> {
+        self.handler.send_response(response)
+    }
+}
+
 pub struct UntunnelRequestHandler<F: StreamCreator> {
     untunneled_clients: Arc<StreamsCache<F, ClientId>>,
 }
@@ -96,7 +115,9 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
     ) -> Self::ResponseFuture {
         Box::pin(untunnel_request(
             request,
-            response_handle,
+            ResponseHandlerWrapper {
+                handler: response_handle,
+            },
             self.untunneled_clients.clone(),
             ClientIdSuffixDecoder::new(HexDecoder {}),
             HexEncoder {},
@@ -104,7 +125,7 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
     }
 }
 
-async fn untunnel_request<R: ResponseHandler, F: StreamCreator, D: Decoder, E: Encoder>(
+async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E: Encoder>(
     request: Request,
     mut response_handle: R,
     untunneled_clients: Arc<StreamsCache<F, ClientId>>,
@@ -120,7 +141,14 @@ async fn untunnel_request<R: ResponseHandler, F: StreamCreator, D: Decoder, E: E
     response_header.set_message_type(MessageType::Response);
     response_header.set_authoritative(true);
 
-    let first_query = (&message.queries()[0]).original();
+    let first_query = match message.queries().len() {
+        1 => (&message.queries()[0]).original(),
+        x => {
+            log::error!("{}: unexpected number of queries {}", message.id(), x);
+            return;
+        }
+    };
+
     if first_query.query_type() != RecordType::TXT {
         response_handle
             .send_response(builder.build_no_records(response_header))
@@ -181,5 +209,69 @@ fn new_iterator<'a>(
     match record {
         None => Box::new(IntoIter::new([])),
         Some(r) => Box::new(IntoIter::new([r])),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::Ipv4Addr;
+
+    use mockall::mock;
+    use tokio_test::io::Builder;
+    use trust_dns_client::op::Message;
+    use trust_dns_client::proto::serialize::binary::BinDecodable;
+    use trust_dns_server::authority::MessageRequest;
+
+    use super::*;
+
+    mock! {
+        Encoder{}
+        impl Encoder for Encoder {
+            fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize;
+            fn encode(&self, data: &[u8]) -> String;
+        }
+    }
+
+    mock! {
+        Decoder{}
+        impl Decoder for Decoder {
+            fn decode(&self, data: &str) -> Result<Vec<u8>, Box<dyn Error>>;
+        }
+    }
+
+    #[tokio::test]
+    async fn dns_empty_message() -> Result<(), Box<dyn Error>> {
+        let message = Message::default();
+        let message_bytes = message.to_vec().unwrap();
+        let request = MessageRequest::from_bytes(&message_bytes).unwrap();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let request = Request {
+            message: request,
+            src: socket,
+        };
+
+        let handler_mock = MockDnsResponseHandler::new();
+        let cache = StreamsCache::new(|| {
+            let untunneled_read_mock = Builder::new().build();
+            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
+            let untunneled_write_mock = Builder::new().build();
+            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
+            Ok(Stream {
+                reader: untunneled_reader,
+                writer: untunneled_writer,
+            })
+        });
+        let decoder_mock = MockDecoder::new();
+        let encoder_mock = MockEncoder::new();
+
+        untunnel_request(
+            request,
+            handler_mock,
+            Arc::new(cache),
+            decoder_mock,
+            encoder_mock,
+        )
+        .await;
+        Ok(())
     }
 }
