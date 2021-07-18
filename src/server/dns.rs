@@ -93,6 +93,8 @@ impl<R: ResponseHandler> DnsResponseHandler for ResponseHandlerWrapper<R> {
     }
 }
 
+const MAXIMUM_TXT_RECORD_SIZE: usize = 54;
+
 pub struct UntunnelRequestHandler<F: StreamCreator> {
     untunneled_clients: Arc<StreamsCache<F, ClientId>>,
 }
@@ -147,11 +149,17 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         }
     };
 
-    let data_to_tunnel =
-        match untunnel_data(untunneled_clients, data_from_tunnel, message.id()).await {
-            Some(x) => x,
-            None => return,
-        };
+    let data_to_tunnel = match untunnel_data(
+        untunneled_clients,
+        data_from_tunnel,
+        message.id(),
+        encoder.calculate_max_decoded_size(MAXIMUM_TXT_RECORD_SIZE),
+    )
+    .await
+    {
+        Some(x) => x,
+        None => return,
+    };
 
     let encoded_data_to_tunnel = encoder.encode(&data_to_tunnel);
     log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
@@ -195,6 +203,7 @@ async fn untunnel_data<F: StreamCreator>(
     clients: Arc<StreamsCache<F, ClientId>>,
     data: Vec<u8>,
     message_id: u16,
+    data_to_tunnel_max_size: usize,
 ) -> Option<Vec<u8>> {
     if data.len() < CLIENT_ID_SIZE_IN_BYTES + 1 {
         log::error!(
@@ -219,7 +228,7 @@ async fn untunnel_data<F: StreamCreator>(
         return None;
     };
 
-    let mut data_to_tunnel = vec![0; 4096];
+    let mut data_to_tunnel = vec![0; data_to_tunnel_max_size];
     let size = match client.lock().await.reader.read(&mut data_to_tunnel).await {
         Ok(x) => x,
         Err(e) => {
@@ -482,7 +491,10 @@ mod tests {
         decoder_mock
             .expect_decode()
             .returning(|_| Ok(String::from("12").into_bytes()));
-        let encoder_mock = MockEncoder::new();
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
 
         untunnel_request(
             request,
@@ -526,7 +538,10 @@ mod tests {
         decoder_mock
             .expect_decode()
             .returning(|_| Ok(String::from("bla1234").into_bytes()));
-        let encoder_mock = MockEncoder::new();
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
 
         untunnel_request(
             request,
@@ -570,7 +585,10 @@ mod tests {
         decoder_mock
             .expect_decode()
             .returning(|_| Ok(String::from("bla1234").into_bytes()));
-        let encoder_mock = MockEncoder::new();
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
 
         untunnel_request(
             request,
@@ -616,6 +634,9 @@ mod tests {
             .expect_decode()
             .returning(|_| Ok(String::from("bla1234").into_bytes()));
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         untunnel_request(
@@ -660,6 +681,9 @@ mod tests {
             .expect_decode()
             .returning(|_| Ok(String::from("bla1234").into_bytes()));
         let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
         encoder_mock.expect_encode().return_const("encoded");
 
         untunnel_request(
