@@ -15,7 +15,7 @@ use trust_dns_client::udp::UdpClientStream;
 use common::dns::{
     new_client_id, ClientId, ClientIdSuffixEncoder, Decoder, Encoder, HexDecoder, HexEncoder,
 };
-use common::io::{AsyncReader, AsyncWriter};
+use common::io::{AsyncReader, Stream};
 
 use crate::tunnel::Tunneler;
 
@@ -75,11 +75,7 @@ impl DnsTunneler {
 
 #[async_trait(?Send)]
 impl Tunneler for DnsTunneler {
-    async fn tunnel(
-        &mut self,
-        mut to_tunnel: Box<dyn AsyncReader>,
-        mut from_tunnel: Box<dyn AsyncWriter>,
-    ) -> Result<(), Box<dyn Error>> {
+    async fn tunnel(&mut self, mut client: Stream) -> Result<(), Box<dyn Error>> {
         let mut data_to_tunnel = vec![0; MAXIMUM_LABEL_SIZE];
         let read_limit = self
             .encoder
@@ -87,7 +83,7 @@ impl Tunneler for DnsTunneler {
 
         loop {
             let size = self
-                .read_data_to_tunnel(&mut to_tunnel, &mut data_to_tunnel, read_limit)
+                .read_data_to_tunnel(&mut client.reader, &mut data_to_tunnel, read_limit)
                 .await?;
             if size == 0 {
                 break;
@@ -99,7 +95,7 @@ impl Tunneler for DnsTunneler {
 
             log::debug!("received from tunnel {:?}", encoded_data_from_tunnel);
             let data_from_tunnel = self.decoder.decode(&encoded_data_from_tunnel)?;
-            from_tunnel.write(data_from_tunnel.as_slice()).await?;
+            client.writer.write(data_from_tunnel.as_slice()).await?;
         }
         Ok(())
     }
@@ -159,8 +155,6 @@ mod tests {
     use trust_dns_client::proto::rr::rdata::TXT;
     use trust_dns_client::proto::rr::Record;
 
-    use common::io::{AsyncReadWrapper, AsyncWriteWrapper};
-
     use super::*;
 
     mock! {
@@ -195,14 +189,14 @@ mod tests {
             decoder: Box::new(MockDecoder::new()),
         };
 
-        let tunneled_read_mock = Builder::new()
-            .read_error(io::Error::new(ErrorKind::Other, "oh no!"))
-            .build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new()
+                .read_error(io::Error::new(ErrorKind::Other, "oh no!"))
+                .build(),
+            Builder::new().build(),
+        );
 
-        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        let result = tunneler.tunnel(client).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -224,12 +218,9 @@ mod tests {
             decoder: Box::new(MockDecoder::new()),
         };
 
-        let tunneled_read_mock = Builder::new().build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(Builder::new().build(), Builder::new().build());
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 
     #[tokio::test]
@@ -249,12 +240,9 @@ mod tests {
             decoder: Box::new(MockDecoder::new()),
         };
 
-        let tunneled_read_mock = Builder::new().build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(Builder::new().build(), Builder::new().build());
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 
     #[tokio::test]
@@ -279,12 +267,9 @@ mod tests {
             decoder: Box::new(MockDecoder::new()),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
 
-        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        let result = tunneler.tunnel(client).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -311,12 +296,9 @@ mod tests {
             decoder: Box::new(MockDecoder::new()),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
 
-        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        let result = tunneler.tunnel(client).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -345,12 +327,9 @@ mod tests {
             decoder: Box::new(MockDecoder::new()),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
 
-        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        let result = tunneler.tunnel(client).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -380,12 +359,9 @@ mod tests {
             decoder: Box::new(MockDecoder::new()),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
 
-        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        let result = tunneler.tunnel(client).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -421,12 +397,9 @@ mod tests {
             decoder: Box::new(decoder_mock),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
 
-        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        let result = tunneler.tunnel(client).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -462,14 +435,14 @@ mod tests {
             decoder: Box::new(decoder_mock),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new()
-            .write_error(io::Error::new(ErrorKind::Other, "oh no!"))
-            .build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().read(b"bla").build(),
+            Builder::new()
+                .write_error(io::Error::new(ErrorKind::Other, "oh no!"))
+                .build(),
+        );
 
-        let result = tunneler.tunnel(tunneled_reader, tunneled_writer).await;
+        let result = tunneler.tunnel(client).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -505,12 +478,12 @@ mod tests {
             decoder: Box::new(decoder_mock),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().write(b"decoded").build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().read(b"bla").build(),
+            Builder::new().write(b"decoded").build(),
+        );
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 
     #[tokio::test]
@@ -544,11 +517,11 @@ mod tests {
             decoder: Box::new(decoder_mock),
         };
 
-        let tunneled_read_mock = Builder::new().read(b"bla").read(b"bla").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().write(b"decoded").write(b"decoded").build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().read(b"bla").read(b"bla").build(),
+            Builder::new().write(b"decoded").write(b"decoded").build(),
+        );
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 }

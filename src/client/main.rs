@@ -86,7 +86,7 @@ async fn tunnel_clients(
 ) -> Result<(), Box<dyn Error>> {
     while let Ok(client) = clients.recv().await {
         let mut tunnel = new_tunneler(tunnel_type, remote_address, remote_port).await?;
-        tunnel.tunnel(client.reader, client.writer).await?
+        tunnel.tunnel(client).await?
     }
     Ok(())
 }

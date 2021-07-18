@@ -4,15 +4,11 @@ use std::net::IpAddr;
 use async_trait::async_trait;
 use tokio::net::TcpStream;
 
-use common::io::{copy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter};
+use common::io::{copy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
 
 #[async_trait(?Send)]
 pub(crate) trait Tunneler {
-    async fn tunnel(
-        &mut self,
-        to_tunnel: Box<dyn AsyncReader>,
-        from_tunnel: Box<dyn AsyncWriter>,
-    ) -> Result<(), Box<dyn Error>>;
+    async fn tunnel(&mut self, mut client: Stream) -> Result<(), Box<dyn Error>>;
 }
 
 pub(crate) struct TcpTunneler {
@@ -37,15 +33,11 @@ impl TcpTunneler {
 
 #[async_trait(?Send)]
 impl Tunneler for TcpTunneler {
-    async fn tunnel(
-        &mut self,
-        mut to_tunnel: Box<dyn AsyncReader>,
-        mut from_tunnel: Box<dyn AsyncWriter>,
-    ) -> Result<(), Box<dyn Error>> {
-        let to_tunnel_future = copy(&mut to_tunnel, &mut self.to_tunnel, "sending to tunnel");
+    async fn tunnel(&mut self, mut client: Stream) -> Result<(), Box<dyn Error>> {
+        let to_tunnel_future = copy(&mut client.reader, &mut self.to_tunnel, "sending to tunnel");
         let from_tunnel_future = copy(
             &mut self.from_tunnel,
-            &mut from_tunnel,
+            &mut client.writer,
             "received from tunnel",
         );
         match tokio::try_join!(to_tunnel_future, from_tunnel_future) {
@@ -72,12 +64,12 @@ mod tests {
             to_tunnel: tunneler_writer,
         };
 
-        let tunneled_read_mock = Builder::new().read(b"hello").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().read(b"hello").build(),
+            Builder::new().build(),
+        );
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 
     #[tokio::test]
@@ -91,12 +83,12 @@ mod tests {
             to_tunnel: tunneler_writer,
         };
 
-        let tunneled_read_mock = Builder::new().build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().write(b"hello").build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().build(),
+            Builder::new().write(b"hello").build(),
+        );
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 
     #[tokio::test]
@@ -110,12 +102,12 @@ mod tests {
             to_tunnel: tunneler_writer,
         };
 
-        let tunneled_read_mock = Builder::new().read(b"world").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().write(b"hello").build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().read(b"world").build(),
+            Builder::new().write(b"hello").build(),
+        );
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 
     #[tokio::test]
@@ -129,12 +121,12 @@ mod tests {
             to_tunnel: tunneler_writer,
         };
 
-        let tunneled_read_mock = Builder::new().read(b"1").read(b"2").read(b"3").build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().read(b"1").read(b"2").read(b"3").build(),
+            Builder::new().build(),
+        );
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 
     #[tokio::test]
@@ -148,11 +140,11 @@ mod tests {
             to_tunnel: tunneler_writer,
         };
 
-        let tunneled_read_mock = Builder::new().build();
-        let tunneled_reader = Box::new(AsyncReadWrapper::new(tunneled_read_mock));
-        let tunneled_write_mock = Builder::new().write(b"1").write(b"2").write(b"3").build();
-        let tunneled_writer = Box::new(AsyncWriteWrapper::new(tunneled_write_mock));
+        let client = Stream::new(
+            Builder::new().build(),
+            Builder::new().write(b"1").write(b"2").write(b"3").build(),
+        );
 
-        tunneler.tunnel(tunneled_reader, tunneled_writer).await
+        tunneler.tunnel(client).await
     }
 }
