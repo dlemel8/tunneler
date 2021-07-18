@@ -16,7 +16,7 @@ use tokio::net::UdpSocket;
 use trust_dns_client::op::{Header, MessageType, OpCode};
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
-use trust_dns_server::authority::{MessageResponse, MessageResponseBuilder};
+use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageResponseBuilder};
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
 use trust_dns_server::ServerFuture;
 
@@ -133,37 +133,13 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     encoder: E,
 ) {
     let message = request.message;
-    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
-
-    let mut response_header = Header::new();
-    response_header.set_id(message.id());
-    response_header.set_op_code(OpCode::Query);
-    response_header.set_message_type(MessageType::Response);
-    response_header.set_authoritative(true);
-
-    let first_query = match message.queries().len() {
-        1 => (&message.queries()[0]).original(),
-        x => {
-            log::error!("{}: unexpected number of queries {}", message.id(), x);
-            return;
-        }
+    let encoded_data_from_tunnel = match get_data_from_tunnel(&message) {
+        Some(x) => x,
+        None => return,
     };
 
-    if first_query.query_type() != RecordType::TXT {
-        response_handle
-            .send_response(builder.build_no_records(response_header))
-            .unwrap();
-        return;
-    }
-
-    let encoded_received_data = first_query
-        .name()
-        .to_string()
-        .trim_end_matches('.')
-        .to_string();
-
-    log::debug!("received from tunnel {:?}", encoded_received_data);
-    let received_data = decoder.decode(&encoded_received_data).unwrap();
+    log::debug!("received from tunnel {:?}", encoded_data_from_tunnel);
+    let received_data = decoder.decode(&encoded_data_from_tunnel).unwrap();
     let (received_data, client_id) =
         received_data.split_at(received_data.len() - CLIENT_ID_SIZE_IN_BYTES);
     let client = untunneled_clients
@@ -193,6 +169,13 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         .set_dns_class(DNSClass::IN)
         .clone();
 
+    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
+    let mut response_header = Header::new();
+    response_header.set_id(message.id());
+    response_header.set_op_code(OpCode::Query);
+    response_header.set_message_type(MessageType::Response);
+    response_header.set_authoritative(true);
+
     let response = builder.build(
         response_header,
         new_iterator(Some(&answer)),
@@ -201,6 +184,30 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         new_iterator(None),
     );
     response_handle.send_response(response).unwrap();
+}
+
+fn get_data_from_tunnel(message: &MessageRequest) -> Option<String> {
+    let first_query = match message.queries().len() {
+        1 => (&message.queries()[0]).original(),
+        x => {
+            log::error!("{}: unexpected number of queries {}", message.id(), x);
+            return None;
+        }
+    };
+
+    let data_from_tunnel = match first_query.query_type() {
+        RecordType::TXT => first_query
+            .name()
+            .to_string()
+            .trim_end_matches('.')
+            .to_string(),
+        x => {
+            log::error!("{}: unexpected type of query {}", message.id(), x);
+            return None;
+        }
+    };
+
+    Some(data_from_tunnel)
 }
 
 fn new_iterator<'a>(
@@ -221,6 +228,7 @@ mod tests {
     use trust_dns_client::op::Message;
     use trust_dns_client::proto::serialize::binary::BinDecodable;
     use trust_dns_server::authority::MessageRequest;
+    use trust_dns_server::proto::op::Query;
 
     use super::*;
 
@@ -242,6 +250,82 @@ mod tests {
     #[tokio::test]
     async fn dns_empty_message() -> Result<(), Box<dyn Error>> {
         let message = Message::default();
+        let message_bytes = message.to_vec().unwrap();
+        let request = MessageRequest::from_bytes(&message_bytes).unwrap();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let request = Request {
+            message: request,
+            src: socket,
+        };
+
+        let handler_mock = MockDnsResponseHandler::new();
+        let cache = StreamsCache::new(|| {
+            let untunneled_read_mock = Builder::new().build();
+            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
+            let untunneled_write_mock = Builder::new().build();
+            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
+            Ok(Stream {
+                reader: untunneled_reader,
+                writer: untunneled_writer,
+            })
+        });
+        let decoder_mock = MockDecoder::new();
+        let encoder_mock = MockEncoder::new();
+
+        untunnel_request(
+            request,
+            handler_mock,
+            Arc::new(cache),
+            decoder_mock,
+            encoder_mock,
+        )
+        .await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dns_multiple_queries_message() -> Result<(), Box<dyn Error>> {
+        let mut message = Message::default();
+        let queries = message.queries_mut();
+        queries.push(Query::default());
+        queries.push(Query::default());
+        let message_bytes = message.to_vec().unwrap();
+        let request = MessageRequest::from_bytes(&message_bytes).unwrap();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let request = Request {
+            message: request,
+            src: socket,
+        };
+
+        let handler_mock = MockDnsResponseHandler::new();
+        let cache = StreamsCache::new(|| {
+            let untunneled_read_mock = Builder::new().build();
+            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
+            let untunneled_write_mock = Builder::new().build();
+            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
+            Ok(Stream {
+                reader: untunneled_reader,
+                writer: untunneled_writer,
+            })
+        });
+        let decoder_mock = MockDecoder::new();
+        let encoder_mock = MockEncoder::new();
+
+        untunnel_request(
+            request,
+            handler_mock,
+            Arc::new(cache),
+            decoder_mock,
+            encoder_mock,
+        )
+        .await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dns_non_txt_query_message() -> Result<(), Box<dyn Error>> {
+        let mut message = Message::default();
+        message.queries_mut().push(Query::default());
         let message_bytes = message.to_vec().unwrap();
         let request = MessageRequest::from_bytes(&message_bytes).unwrap();
         let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);

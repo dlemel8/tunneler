@@ -95,10 +95,10 @@ impl Tunneler for DnsTunneler {
 
             let encoded_data_to_tunnel = self.encoder.encode(&data_to_tunnel[..size]);
             log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
-            let encoded_received_data = self.send_dns_query(encoded_data_to_tunnel).await?;
+            let encoded_data_from_tunnel = self.send_dns_query(encoded_data_to_tunnel).await?;
 
-            log::debug!("received from tunnel {:?}", encoded_received_data);
-            let data_from_tunnel = self.decoder.decode(&encoded_received_data)?;
+            log::debug!("received from tunnel {:?}", encoded_data_from_tunnel);
+            let data_from_tunnel = self.decoder.decode(&encoded_data_from_tunnel)?;
             from_tunnel.write(data_from_tunnel.as_slice()).await?;
         }
         Ok(())
