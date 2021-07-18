@@ -54,7 +54,6 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::io::{AsyncReadWrapper, AsyncWriteWrapper};
     use tokio_test::io::Builder;
 
     #[test]
@@ -67,16 +66,8 @@ mod tests {
 
     #[test]
     fn stream_cache_get_new_stream_success() -> Result<(), Box<dyn Error>> {
-        let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
-        });
+        let cache =
+            StreamsCache::new(|| Ok(Stream::new(Builder::new().build(), Builder::new().build())));
 
         cache.get("bla")?;
 
@@ -91,12 +82,11 @@ mod tests {
         let cache = StreamsCache::new(|| Err(String::from("bla").into()));
         {
             let mut entries = cache.entries.lock().unwrap();
-            let read_mock = Builder::new().build();
-            let reader = Box::new(AsyncReadWrapper::new(read_mock));
-            let write_mock = Builder::new().build();
-            let writer = Box::new(AsyncWriteWrapper::new(write_mock));
             let entry = CacheEntry {
-                stream: Arc::new(AsyncMutex::new(Stream { reader, writer })),
+                stream: Arc::new(AsyncMutex::new(Stream::new(
+                    Builder::new().build(),
+                    Builder::new().build(),
+                ))),
                 last_activity: Instant::now(),
             };
             entries.insert("bla", entry);

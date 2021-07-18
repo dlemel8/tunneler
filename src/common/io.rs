@@ -84,6 +84,21 @@ pub struct Stream {
     pub writer: Box<dyn AsyncWriter>,
 }
 
+impl Stream {
+    pub fn new<
+        R: AsyncReadExt + Unpin + Send + 'static,
+        W: AsyncWriteExt + Unpin + Send + 'static,
+    >(
+        reader: R,
+        writer: W,
+    ) -> Self {
+        Self {
+            reader: Box::new(AsyncReadWrapper::new(reader)),
+            writer: Box::new(AsyncWriteWrapper::new(writer)),
+        }
+    }
+}
+
 pub struct TcpServer {
     listener: TcpListener,
 }
@@ -103,9 +118,9 @@ impl TcpServer {
         while let Ok((client_stream, client_address)) = self.listener.accept().await {
             log::debug!("got connection from {}", client_address);
             let (client_reader, client_writer) = client_stream.into_split();
-            let reader = Box::new(AsyncReadWrapper::new(client_reader));
-            let writer = Box::new(AsyncWriteWrapper::new(client_writer));
-            new_clients.send(Stream { reader, writer }).await?;
+            new_clients
+                .send(Stream::new(client_reader, client_writer))
+                .await?;
         }
         Ok(())
     }

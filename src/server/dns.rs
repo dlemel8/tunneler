@@ -24,7 +24,7 @@ use common::dns::{
     ClientId, ClientIdSuffixDecoder, Decoder, Encoder, HexDecoder, HexEncoder,
     CLIENT_ID_SIZE_IN_BYTES,
 };
-use common::io::{AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
+use common::io::Stream;
 
 use crate::io::{StreamCreator, StreamsCache};
 use crate::tunnel::Untunneler;
@@ -50,21 +50,10 @@ impl Untunneler for DnsUntunneler {
             let (local, remote) = duplex(4096);
 
             let (remote_reader, remote_writer) = split(remote);
-            let from_remote: Box<dyn AsyncReader> = Box::new(AsyncReadWrapper::new(remote_reader));
-            let to_remote: Box<dyn AsyncWriter> = Box::new(AsyncWriteWrapper::new(remote_writer));
-            let remote_stream = Stream {
-                reader: from_remote,
-                writer: to_remote,
-            };
-            new_clients.try_send(remote_stream)?;
+            new_clients.try_send(Stream::new(remote_reader, remote_writer))?;
 
             let (local_reader, local_writer) = split(local);
-            let from_local: Box<dyn AsyncReader> = Box::new(AsyncReadWrapper::new(local_reader));
-            let to_local: Box<dyn AsyncWriter> = Box::new(AsyncWriteWrapper::new(local_writer));
-            Ok(Stream {
-                reader: from_local,
-                writer: to_local,
-            })
+            Ok(Stream::new(local_reader, local_writer))
         });
 
         let udp_socket = UdpSocket::bind(self.listener_address).await?;
@@ -314,16 +303,8 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
-        });
+        let cache =
+            StreamsCache::new(|| Ok(Stream::new(Builder::new().build(), Builder::new().build())));
         let decoder_mock = MockDecoder::new();
         let encoder_mock = MockEncoder::new();
 
@@ -353,16 +334,8 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
-        });
+        let cache =
+            StreamsCache::new(|| Ok(Stream::new(Builder::new().build(), Builder::new().build())));
         let decoder_mock = MockDecoder::new();
         let encoder_mock = MockEncoder::new();
 
@@ -390,16 +363,8 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
-        });
+        let cache =
+            StreamsCache::new(|| Ok(Stream::new(Builder::new().build(), Builder::new().build())));
         let decoder_mock = MockDecoder::new();
         let encoder_mock = MockEncoder::new();
 
@@ -429,16 +394,8 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
-        });
+        let cache =
+            StreamsCache::new(|| Ok(Stream::new(Builder::new().build(), Builder::new().build())));
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
             .expect_decode()
@@ -471,16 +428,8 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
-        });
+        let cache =
+            StreamsCache::new(|| Ok(Stream::new(Builder::new().build(), Builder::new().build())));
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
             .expect_decode()
@@ -553,16 +502,12 @@ mod tests {
 
         let handler_mock = MockDnsResponseHandler::new();
         let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new()
-                .write_error(io::Error::new(ErrorKind::Other, "oh no!"))
-                .build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
+            Ok(Stream::new(
+                Builder::new().build(),
+                Builder::new()
+                    .write_error(io::Error::new(ErrorKind::Other, "oh no!"))
+                    .build(),
+            ))
         });
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -600,16 +545,12 @@ mod tests {
 
         let handler_mock = MockDnsResponseHandler::new();
         let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new()
-                .read_error(io::Error::new(ErrorKind::Other, "oh no!"))
-                .build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().write(b"bla").build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
+            Ok(Stream::new(
+                Builder::new()
+                    .read_error(io::Error::new(ErrorKind::Other, "oh no!"))
+                    .build(),
+                Builder::new().write(b"bla").build(),
+            ))
         });
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -647,14 +588,10 @@ mod tests {
 
         let handler_mock = MockDnsResponseHandler::new();
         let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().read(b"bli").build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().write(b"bla").build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
+            Ok(Stream::new(
+                Builder::new().read(b"bli").build(),
+                Builder::new().write(b"bla").build(),
+            ))
         });
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -698,14 +635,10 @@ mod tests {
             .expect_send_response()
             .returning(|_| Err(io::Error::new(ErrorKind::Other, "oh no!")));
         let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().read(b"bli").build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().write(b"bla").build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
+            Ok(Stream::new(
+                Builder::new().read(b"bli").build(),
+                Builder::new().write(b"bla").build(),
+            ))
         });
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -747,14 +680,10 @@ mod tests {
         let mut handler_mock = MockDnsResponseHandler::new();
         handler_mock.expect_send_response().returning(|_| Ok(()));
         let cache = StreamsCache::new(|| {
-            let untunneled_read_mock = Builder::new().read(b"bli").build();
-            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
-            let untunneled_write_mock = Builder::new().write(b"bla").build();
-            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
-            Ok(Stream {
-                reader: untunneled_reader,
-                writer: untunneled_writer,
-            })
+            Ok(Stream::new(
+                Builder::new().read(b"bli").build(),
+                Builder::new().write(b"bla").build(),
+            ))
         });
         let mut decoder_mock = MockDecoder::new();
         decoder_mock

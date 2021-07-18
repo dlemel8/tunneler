@@ -6,8 +6,8 @@ use tokio::net::TcpStream;
 
 use common::io::{copy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter};
 
-#[async_trait]
-pub(crate) trait Tunneler: Send {
+#[async_trait(?Send)]
+pub(crate) trait Tunneler {
     async fn tunnel(
         &mut self,
         to_tunnel: Box<dyn AsyncReader>,
@@ -35,7 +35,7 @@ impl TcpTunneler {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Tunneler for TcpTunneler {
     async fn tunnel(
         &mut self,

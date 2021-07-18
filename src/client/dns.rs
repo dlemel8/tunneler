@@ -73,7 +73,7 @@ impl DnsTunneler {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Tunneler for DnsTunneler {
     async fn tunnel(
         &mut self,
