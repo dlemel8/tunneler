@@ -151,8 +151,6 @@ impl DnsTunneler {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
-
     use mockall::mock;
     use tokio::io;
     use tokio::io::ErrorKind;
@@ -179,17 +177,6 @@ mod tests {
             fn decode(&self, data: &str) -> Result<Vec<u8>, Box<dyn Error>>;
         }
     }
-
-    #[derive(Debug)]
-    struct TestError {}
-
-    impl fmt::Display for TestError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "bla")
-        }
-    }
-
-    impl Error for TestError {}
 
     #[tokio::test]
     async fn dns_failed_to_read() -> Result<(), Box<dyn Error>> {
@@ -283,7 +270,7 @@ mod tests {
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock
             .expect_query()
-            .returning(|_, _, _| Err(Box::new(TestError {})));
+            .returning(|_, _, _| Err(String::from("bla").into()));
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
@@ -425,7 +412,7 @@ mod tests {
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
             .expect_decode()
-            .returning(|_| Err(Box::new(TestError {})));
+            .returning(|_| Err(String::from("bla").into()));
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),

@@ -275,7 +275,6 @@ fn new_iterator<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
     use std::net::Ipv4Addr;
 
     use mockall::mock;
@@ -302,17 +301,6 @@ mod tests {
             fn decode(&self, data: &str) -> Result<Vec<u8>, Box<dyn Error>>;
         }
     }
-
-    #[derive(Debug)]
-    struct TestError {}
-
-    impl fmt::Display for TestError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "bla")
-        }
-    }
-
-    impl Error for TestError {}
 
     #[tokio::test]
     async fn dns_empty_message() -> Result<(), Box<dyn Error>> {
@@ -454,7 +442,7 @@ mod tests {
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
             .expect_decode()
-            .returning(|_| Err(Box::new(TestError {})));
+            .returning(|_| Err(String::from("bla").into()));
         let encoder_mock = MockEncoder::new();
 
         untunnel_request(
@@ -514,6 +502,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dns_failed_to_get_client() -> Result<(), Box<dyn Error>> {
+        let mut message = Message::default();
+        let mut query = Query::default();
+        query.set_query_type(RecordType::TXT);
+        message.queries_mut().push(query);
+        let message_bytes = message.to_vec().unwrap();
+        let request = MessageRequest::from_bytes(&message_bytes).unwrap();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let request = Request {
+            message: request,
+            src: socket,
+        };
+
+        let handler_mock = MockDnsResponseHandler::new();
+        let cache = StreamsCache::new(|| {
+            Err(String::from("bla").into())
+        });
+        let mut decoder_mock = MockDecoder::new();
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Ok(String::from("bla1234").into_bytes()));
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
+
+        untunnel_request(
+            request,
+            handler_mock,
+            Arc::new(cache),
+            decoder_mock,
+            encoder_mock,
+        )
+            .await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn dns_failed_to_write_to_client() -> Result<(), Box<dyn Error>> {
         let mut message = Message::default();
         let mut query = Query::default();
@@ -556,7 +582,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
         )
-        .await;
+            .await;
         Ok(())
     }
 
