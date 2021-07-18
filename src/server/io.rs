@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use tokio;
+use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::Instant;
 
 use common::io::Stream;
@@ -17,24 +17,24 @@ pub trait StreamCreator: Fn() -> Result<Stream, Box<dyn Error>> + Send + Sync + 
 impl<T: Fn() -> Result<Stream, Box<dyn Error>> + Send + Sync + 'static> StreamCreator for T {}
 
 struct CacheEntry {
-    stream: Arc<tokio::sync::Mutex<Stream>>,
+    stream: Arc<AsyncMutex<Stream>>,
     last_activity: Instant,
 }
 
 pub(crate) struct StreamsCache<F: StreamCreator, K: CacheKey> {
     new_stream_creator: F,
-    entries: std::sync::Mutex<HashMap<K, CacheEntry>>,
+    entries: Mutex<HashMap<K, CacheEntry>>,
 }
 
 impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
     pub(crate) fn new(new_stream_creator: F) -> Self {
         Self {
             new_stream_creator,
-            entries: std::sync::Mutex::new(HashMap::new()),
+            entries: Mutex::new(HashMap::new()),
         }
     }
 
-    pub(crate) fn get(&self, key: K) -> Result<Arc<tokio::sync::Mutex<Stream>>, Box<dyn Error>> {
+    pub(crate) fn get(&self, key: K) -> Result<Arc<AsyncMutex<Stream>>, Box<dyn Error>> {
         let new_stream_creator = &self.new_stream_creator;
         let now = Instant::now();
         let mut entries = self.entries.lock().unwrap();
@@ -42,7 +42,7 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
         let entry = match entries.entry(key) {
             Entry::Occupied(o) => o.into_mut(),
             Entry::Vacant(v) => v.insert(CacheEntry {
-                stream: Arc::new(tokio::sync::Mutex::new(new_stream_creator()?)),
+                stream: Arc::new(AsyncMutex::new(new_stream_creator()?)),
                 last_activity: now,
             }),
         };
