@@ -50,3 +50,63 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
         Ok(entry.stream.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::io::{AsyncReadWrapper, AsyncWriteWrapper};
+    use tokio_test::io::Builder;
+
+    #[test]
+    fn stream_cache_get_new_stream_creator_failed() -> Result<(), Box<dyn Error>> {
+        let cache = StreamsCache::new(|| Err(String::from("bla").into()));
+        let res = cache.get("bla");
+        assert!(res.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn stream_cache_get_new_stream_success() -> Result<(), Box<dyn Error>> {
+        let cache = StreamsCache::new(|| {
+            let untunneled_read_mock = Builder::new().build();
+            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
+            let untunneled_write_mock = Builder::new().build();
+            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
+            Ok(Stream {
+                reader: untunneled_reader,
+                writer: untunneled_writer,
+            })
+        });
+
+        cache.get("bla")?;
+
+        let entries = cache.entries.lock().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(entries.contains_key("bla"));
+        Ok(())
+    }
+
+    #[test]
+    fn stream_cache_get_existing_stream_success() -> Result<(), Box<dyn Error>> {
+        let cache = StreamsCache::new(|| Err(String::from("bla").into()));
+        {
+            let mut entries = cache.entries.lock().unwrap();
+            let read_mock = Builder::new().build();
+            let reader = Box::new(AsyncReadWrapper::new(read_mock));
+            let write_mock = Builder::new().build();
+            let writer = Box::new(AsyncWriteWrapper::new(write_mock));
+            let entry = CacheEntry {
+                stream: Arc::new(AsyncMutex::new(Stream { reader, writer })),
+                last_activity: Instant::now(),
+            };
+            entries.insert("bla", entry);
+        }
+
+        cache.get("bla")?;
+
+        let entries = cache.entries.lock().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(entries.contains_key("bla"));
+        Ok(())
+    }
+}
