@@ -139,20 +139,19 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     };
 
     log::debug!("received from tunnel {:?}", encoded_data_from_tunnel);
-    let message_id = message.id();
     let data_from_tunnel = match decoder.decode(&encoded_data_from_tunnel) {
         Ok(x) => x,
         Err(e) => {
-            log::error!("{}: failed to decode: {}", message_id, e);
+            log::error!("{}: failed to decode: {}", message.id(), e);
             return;
         }
     };
 
-    let data_to_tunnel = match untunnel_data(untunneled_clients, data_from_tunnel, message_id).await
-    {
-        Some(x) => x,
-        None => return,
-    };
+    let data_to_tunnel =
+        match untunnel_data(untunneled_clients, data_from_tunnel, message.id()).await {
+            Some(x) => x,
+            None => return,
+        };
 
     let encoded_data_to_tunnel = encoder.encode(&data_to_tunnel);
     log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
@@ -176,7 +175,9 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         new_iterator(None),
         new_iterator(None),
     );
-    response_handle.send_response(response).unwrap();
+    response_handle.send_response(response).unwrap_or_else(|e| {
+        log::error!("{}: failed to send response: {}", message.id(), e);
+    });
 }
 
 fn get_data_from_tunnel(message: &MessageRequest) -> Option<String> {
@@ -566,6 +567,96 @@ mod tests {
             .expect_decode()
             .returning(|_| Ok(String::from("bla1234").into_bytes()));
         let encoder_mock = MockEncoder::new();
+
+        untunnel_request(
+            request,
+            handler_mock,
+            Arc::new(cache),
+            decoder_mock,
+            encoder_mock,
+        )
+        .await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dns_failed_to_send_response() -> Result<(), Box<dyn Error>> {
+        let mut message = Message::default();
+        let mut query = Query::default();
+        query.set_query_type(RecordType::TXT);
+        message.queries_mut().push(query);
+        let message_bytes = message.to_vec().unwrap();
+        let request = MessageRequest::from_bytes(&message_bytes).unwrap();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let request = Request {
+            message: request,
+            src: socket,
+        };
+
+        let mut handler_mock = MockDnsResponseHandler::new();
+        handler_mock
+            .expect_send_response()
+            .returning(|_| Err(io::Error::new(ErrorKind::Other, "oh no!")));
+        let cache = StreamsCache::new(|| {
+            let untunneled_read_mock = Builder::new().read(b"bli").build();
+            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
+            let untunneled_write_mock = Builder::new().write(b"bla").build();
+            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
+            Ok(Stream {
+                reader: untunneled_reader,
+                writer: untunneled_writer,
+            })
+        });
+        let mut decoder_mock = MockDecoder::new();
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Ok(String::from("bla1234").into_bytes()));
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock.expect_encode().return_const("encoded");
+
+        untunnel_request(
+            request,
+            handler_mock,
+            Arc::new(cache),
+            decoder_mock,
+            encoder_mock,
+        )
+        .await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dns_success() -> Result<(), Box<dyn Error>> {
+        let mut message = Message::default();
+        let mut query = Query::default();
+        query.set_query_type(RecordType::TXT);
+        message.queries_mut().push(query);
+        let message_bytes = message.to_vec().unwrap();
+        let request = MessageRequest::from_bytes(&message_bytes).unwrap();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let request = Request {
+            message: request,
+            src: socket,
+        };
+
+        let mut handler_mock = MockDnsResponseHandler::new();
+        handler_mock.expect_send_response().returning(|_| Ok(()));
+        let cache = StreamsCache::new(|| {
+            let untunneled_read_mock = Builder::new().read(b"bli").build();
+            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
+            let untunneled_write_mock = Builder::new().write(b"bla").build();
+            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
+            Ok(Stream {
+                reader: untunneled_reader,
+                writer: untunneled_writer,
+            })
+        });
+        let mut decoder_mock = MockDecoder::new();
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Ok(String::from("bla1234").into_bytes()));
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock.expect_encode().return_const("encoded");
 
         untunnel_request(
             request,
