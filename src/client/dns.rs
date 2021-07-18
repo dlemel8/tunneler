@@ -197,7 +197,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
@@ -224,7 +226,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
@@ -247,7 +251,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_| Err(String::from("bla").into()));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Err(String::from("bla").into()));
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
@@ -270,7 +276,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock
@@ -300,7 +308,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock
@@ -330,7 +340,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock.expect_query().returning(|_, _, _| {
@@ -363,7 +375,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock.expect_query().returning(|_, _, _| {
@@ -395,7 +409,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock.expect_query().returning(|_, _, _| {
@@ -434,7 +450,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock.expect_query().returning(|_, _, _| {
@@ -475,7 +493,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock.expect_query().returning(|_, _, _| {
@@ -512,7 +532,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         let mut client_mock = MockAsyncDnsClient::new();
         client_mock.expect_query().returning(|_, _, _| {

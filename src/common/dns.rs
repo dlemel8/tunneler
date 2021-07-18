@@ -133,7 +133,9 @@ mod tests {
     #[test]
     fn client_id_suffix_encoder_internal_encoder_failed() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
-        encoder_mock.expect_encode().returning(|_| Err(String::from("bla").into()));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Err(String::from("bla").into()));
         let encoder = ClientIdSuffixEncoder::new(encoder_mock);
         let res = encoder.encode(b"bla1234");
         assert!(res.is_err());
@@ -143,7 +145,9 @@ mod tests {
     #[test]
     fn client_id_suffix_encoder_success() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
-        encoder_mock.expect_encode().returning(|_| Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
         let encoder = ClientIdSuffixEncoder::new(encoder_mock);
         let res = encoder.encode(b"bla1234")?;
         assert_eq!("encoded1234", res);
@@ -162,7 +166,9 @@ mod tests {
     #[test]
     fn client_id_suffix_decoder_internal_decoder_failed() -> Result<(), Box<dyn Error>> {
         let mut decoder_mock = MockDecoder::new();
-        decoder_mock.expect_decode().returning(|_| Err(String::from("bla").into()));
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Err(String::from("bla").into()));
         let decoder = ClientIdSuffixDecoder::new(decoder_mock);
         let res = decoder.decode("bla1234");
         assert!(res.is_err());
@@ -172,7 +178,9 @@ mod tests {
     #[test]
     fn client_id_suffix_decoder_success() -> Result<(), Box<dyn Error>> {
         let mut decoder_mock = MockDecoder::new();
-        decoder_mock.expect_decode().returning(|_| Ok(String::from("decoded").into_bytes()));
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Ok(String::from("decoded").into_bytes()));
         let decoder = ClientIdSuffixDecoder::new(decoder_mock);
         let res = decoder.decode("bla1234")?;
         assert_eq!(b"decoded1234", res.as_slice());

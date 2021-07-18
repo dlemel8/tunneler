@@ -640,7 +640,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_| Err(String::from("bla").into()));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Err(String::from("bla").into()));
 
         untunnel_request(
             request,
@@ -649,7 +651,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
         )
-            .await;
+        .await;
         Ok(())
     }
 
@@ -689,7 +691,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         untunnel_request(
             request,
@@ -698,7 +702,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
         )
-            .await;
+        .await;
         Ok(())
     }
 
@@ -736,7 +740,9 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
 
         untunnel_request(
             request,
