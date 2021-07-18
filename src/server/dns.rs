@@ -516,9 +516,7 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(|| {
-            Err(String::from("bla").into())
-        });
+        let cache = StreamsCache::new(|| Err(String::from("bla").into()));
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
             .expect_decode()
@@ -535,7 +533,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
         )
-            .await;
+        .await;
         Ok(())
     }
 
@@ -582,7 +580,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
         )
-            .await;
+        .await;
         Ok(())
     }
 
