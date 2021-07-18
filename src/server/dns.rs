@@ -161,7 +161,13 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         None => return,
     };
 
-    let encoded_data_to_tunnel = encoder.encode(&data_to_tunnel);
+    let encoded_data_to_tunnel = match encoder.encode(&data_to_tunnel) {
+        Ok(x) => x,
+        Err(e) => {
+            log::error!("{}: failed to encode: {}", message.id(), e);
+            return;
+        }
+    };
     log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
     let answer = Record::new()
         .set_rdata(RData::TXT(TXT::new(vec![encoded_data_to_tunnel])))
@@ -286,7 +292,7 @@ mod tests {
         Encoder{}
         impl Encoder for Encoder {
             fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize;
-            fn encode(&self, data: &[u8]) -> String;
+            fn encode(&self, data: &[u8]) -> Result<String, Box<dyn Error>>;
         }
     }
 
@@ -602,6 +608,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dns_failed_to_encode() -> Result<(), Box<dyn Error>> {
+        let mut message = Message::default();
+        let mut query = Query::default();
+        query.set_query_type(RecordType::TXT);
+        message.queries_mut().push(query);
+        let message_bytes = message.to_vec().unwrap();
+        let request = MessageRequest::from_bytes(&message_bytes).unwrap();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let request = Request {
+            message: request,
+            src: socket,
+        };
+
+        let handler_mock = MockDnsResponseHandler::new();
+        let cache = StreamsCache::new(|| {
+            let untunneled_read_mock = Builder::new().read(b"bli").build();
+            let untunneled_reader = Box::new(AsyncReadWrapper::new(untunneled_read_mock));
+            let untunneled_write_mock = Builder::new().write(b"bla").build();
+            let untunneled_writer = Box::new(AsyncWriteWrapper::new(untunneled_write_mock));
+            Ok(Stream {
+                reader: untunneled_reader,
+                writer: untunneled_writer,
+            })
+        });
+        let mut decoder_mock = MockDecoder::new();
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Ok(String::from("bla1234").into_bytes()));
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_calculate_max_decoded_size()
+            .return_const(17 as usize);
+        encoder_mock.expect_encode().returning(|_| Err(String::from("bla").into()));
+
+        untunnel_request(
+            request,
+            handler_mock,
+            Arc::new(cache),
+            decoder_mock,
+            encoder_mock,
+        )
+            .await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn dns_failed_to_send_response() -> Result<(), Box<dyn Error>> {
         let mut message = Message::default();
         let mut query = Query::default();
@@ -637,7 +689,7 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().return_const("encoded");
+        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
 
         untunnel_request(
             request,
@@ -646,7 +698,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
         )
-        .await;
+            .await;
         Ok(())
     }
 
@@ -684,7 +736,7 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock.expect_encode().return_const("encoded");
+        encoder_mock.expect_encode().returning(|_|Ok(String::from("encoded")));
 
         untunnel_request(
             request,
