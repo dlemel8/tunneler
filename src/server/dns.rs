@@ -132,8 +132,8 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     decoder: D,
     encoder: E,
 ) {
-    let message = request.message;
-    let encoded_data_from_tunnel = match get_data_from_tunnel(&message) {
+    let message = &request.message;
+    let encoded_data_from_tunnel = match get_data_from_tunnel(message) {
         Some(x) => x,
         None => return,
     };
@@ -161,20 +161,7 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         .set_dns_class(DNSClass::IN)
         .clone();
 
-    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
-    let mut response_header = Header::new();
-    response_header.set_id(message.id());
-    response_header.set_op_code(OpCode::Query);
-    response_header.set_message_type(MessageType::Response);
-    response_header.set_authoritative(true);
-
-    let response = builder.build(
-        response_header,
-        new_iterator(Some(&answer)),
-        new_iterator(None),
-        new_iterator(None),
-        new_iterator(None),
-    );
+    let response = create_response(message, &answer);
     response_handle.send_response(response).unwrap_or_else(|e| {
         log::error!("{}: failed to send response: {}", message.id(), e);
     });
@@ -243,6 +230,23 @@ async fn untunnel_data<F: StreamCreator>(
 
     data_to_tunnel.truncate(size);
     Some(data_to_tunnel)
+}
+
+fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> MessageResponse<'a, 'a> {
+    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
+    let mut response_header = Header::new();
+    response_header.set_id(message.id());
+    response_header.set_op_code(OpCode::Query);
+    response_header.set_message_type(MessageType::Response);
+    response_header.set_authoritative(true);
+
+    builder.build(
+        response_header,
+        new_iterator(Some(answer)),
+        new_iterator(None),
+        new_iterator(None),
+        new_iterator(None),
+    )
 }
 
 fn new_iterator<'a>(
