@@ -26,7 +26,7 @@ pub(crate) struct StreamsCache<F: StreamCreator, K: CacheKey> {
     entries: Mutex<HashMap<K, CacheEntry>>,
     idle_entry_timeout: Duration,
     cleanup_interval: Duration,
-    last_cleanup: Instant,
+    last_cleanup: Mutex<Instant>,
 }
 
 impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
@@ -40,7 +40,7 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
             entries: Mutex::new(HashMap::new()),
             idle_entry_timeout,
             cleanup_interval,
-            last_cleanup: Instant::now(),
+            last_cleanup: Mutex::new(Instant::now()),
         }
     }
 
@@ -50,8 +50,10 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
         now: Instant,
     ) -> Result<Arc<AsyncMutex<Stream>>, Box<dyn Error>> {
         let res = self.get_or_create_stream(key, now);
-        if now - self.last_cleanup > self.cleanup_interval {
+        let mut last_cleanup = self.last_cleanup.lock().unwrap();
+        if now - *last_cleanup > self.cleanup_interval {
             self.cleanup_old_idle_streams(now);
+            *last_cleanup = now;
         };
         res
     }
@@ -114,6 +116,8 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert!(entries.contains_key("bla"));
         assert_eq!(entries.get("bla").unwrap().last_activity, now);
+        let last_cleanup = cache.last_cleanup.lock().unwrap();
+        assert_ne!(*last_cleanup, now);
         Ok(())
     }
 
@@ -147,6 +151,8 @@ mod tests {
         assert_eq!(entries.get("bla").unwrap().last_activity, t2);
         assert!(entries.contains_key("bli"));
         assert_eq!(entries.get("bli").unwrap().last_activity, t1);
+        let last_cleanup = cache.last_cleanup.lock().unwrap();
+        assert_ne!(*last_cleanup, t2);
         Ok(())
     }
 
@@ -177,6 +183,8 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert!(entries.contains_key("bla"));
         assert_eq!(entries.get("bla").unwrap().last_activity, now);
+        let last_cleanup = cache.last_cleanup.lock().unwrap();
+        assert_ne!(*last_cleanup, now);
         Ok(())
     }
 
@@ -207,6 +215,8 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert!(entries.contains_key("bla"));
         assert_eq!(entries.get("bla").unwrap().last_activity, now);
+        let last_cleanup = cache.last_cleanup.lock().unwrap();
+        assert_eq!(*last_cleanup, now);
         Ok(())
     }
 }
