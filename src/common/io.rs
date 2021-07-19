@@ -12,7 +12,7 @@ pub trait AsyncReader: Send {
     async fn read<'a>(&'a mut self, buf: &'a mut [u8]) -> io::Result<usize>;
 }
 
-pub struct AsyncReadWrapper<R: AsyncReadExt + Unpin> {
+struct AsyncReadWrapper<R: AsyncReadExt + Unpin> {
     reader: R,
 }
 
@@ -38,7 +38,7 @@ pub trait AsyncWriter: Send {
     async fn shutdown(&mut self) -> io::Result<()>;
 }
 
-pub struct AsyncWriteWrapper<W: AsyncWriteExt + Unpin> {
+struct AsyncWriteWrapper<W: AsyncWriteExt + Unpin> {
     writer: W,
 }
 

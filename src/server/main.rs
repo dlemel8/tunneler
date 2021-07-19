@@ -5,7 +5,7 @@ use async_channel::Receiver;
 use simple_logger::SimpleLogger;
 use tokio::net::TcpStream;
 
-use common::io::{copy, AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
+use common::io::{copy, Stream};
 
 use crate::dns::DnsUntunneler;
 use crate::tunnel::{TcpUntunneler, Untunneler};
@@ -51,7 +51,7 @@ async fn forward_clients(
 async fn forward_client(mut client: Stream, remote_address: IpAddr, remote_port: u16) {
     let to_address = format!("{}:{}", remote_address, remote_port);
     log::debug!("connecting to {}", to_address);
-    let stream = match TcpStream::connect(&to_address).await {
+    let server = match TcpStream::connect(&to_address).await {
         Ok(s) => s,
         Err(e) => {
             log::error!("failed to connect to {}: {}", to_address, e);
@@ -59,11 +59,18 @@ async fn forward_client(mut client: Stream, remote_address: IpAddr, remote_port:
         }
     };
 
-    let (to_reader, to_writer) = stream.into_split();
-    let mut to_tunnel: Box<dyn AsyncReader> = Box::new(AsyncReadWrapper::new(to_reader));
-    let mut from_tunnel: Box<dyn AsyncWriter> = Box::new(AsyncWriteWrapper::new(to_writer));
-    let to_tunnel_future = copy(&mut to_tunnel, &mut client.writer, "sending to tunnel");
-    let from_tunnel_future = copy(&mut client.reader, &mut from_tunnel, "received from tunnel");
+    let (server_reader, server_writer) = server.into_split();
+    let mut server_stream = Stream::new(server_reader, server_writer);
+    let to_tunnel_future = copy(
+        &mut server_stream.reader,
+        &mut client.writer,
+        "sending to tunnel",
+    );
+    let from_tunnel_future = copy(
+        &mut client.reader,
+        &mut server_stream.writer,
+        "received from tunnel",
+    );
     if let Err(e) = tokio::try_join!(to_tunnel_future, from_tunnel_future) {
         log::error!("failed to forward client: {}", e)
     }
