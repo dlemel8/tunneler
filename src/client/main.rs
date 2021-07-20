@@ -3,8 +3,9 @@ use std::net::IpAddr;
 
 use async_channel::Receiver;
 use simple_logger::SimpleLogger;
-use structopt::{clap::arg_enum, StructOpt};
+use structopt::StructOpt;
 
+use common::cli::{Cli, TunnelType};
 use common::io::{Stream, TcpServer};
 
 use crate::dns::DnsTunneler;
@@ -13,35 +14,6 @@ use crate::tunnel::{TcpTunneler, Tunneler};
 mod dns;
 mod tunnel;
 
-arg_enum! {
-    #[derive(Debug, Copy, Clone)]
-    enum TunnelType {
-        Tcp,
-        Dns,
-    }
-}
-
-#[derive(StructOpt, Debug)]
-struct Cli {
-    #[structopt(env, possible_values = & TunnelType::variants(), case_insensitive = true)]
-    tunnel_type: TunnelType,
-
-    #[structopt(env)]
-    remote_address: IpAddr,
-
-    #[structopt(env)]
-    remote_port: u16,
-
-    #[structopt(default_value = "0.0.0.0", long, env)]
-    local_address: IpAddr,
-
-    #[structopt(default_value = "8888", long, env)]
-    local_port: u16,
-
-    #[structopt(default_value = "info", long, env)]
-    log_level: log::LevelFilter,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args: Cli = Cli::from_args();
@@ -49,7 +21,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_level(args.log_level)
         .init()
         .unwrap();
-    log::debug!("args are {:?}", args);
+    log::debug!("start client - args are {:?}", args);
 
     // TODO - support both TCP and UDP?
     let mut server = TcpServer::new(args.local_address, args.local_port).await?;
@@ -67,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-pub(crate) async fn new_tunneler(
+async fn new_tunneler(
     tunnel_type: TunnelType,
     address: IpAddr,
     port: u16,

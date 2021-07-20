@@ -3,8 +3,10 @@ use std::net::IpAddr;
 
 use async_channel::Receiver;
 use simple_logger::SimpleLogger;
+use structopt::StructOpt;
 use tokio::net::TcpStream;
 
+use common::cli::{Cli, TunnelType};
 use common::io::{copy, Stream};
 
 use crate::dns::DnsUntunneler;
@@ -16,24 +18,33 @@ mod tunnel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let args: Cli = Cli::from_args();
     SimpleLogger::new()
-        .with_level(log::LevelFilter::Debug)
+        .with_level(args.log_level)
         .init()
         .unwrap();
-    log::debug!("start server");
+    log::debug!("start server - args are {:?}", args);
 
-    dns_server().await?;
-    tcp_server().await
-}
-
-async fn dns_server() -> Result<(), Box<dyn Error>> {
-    let mut untunneler = DnsUntunneler::new("127.0.0.1".parse()?, 8899).await?;
+    let mut untunneler =
+        new_untunneler(args.tunnel_type, args.local_address, args.local_port).await?;
     let (untunneled_sender, untunneled_receiver) = async_channel::unbounded::<Stream>();
     let untunnel_clients_future = untunneler.untunnel(untunneled_sender);
-    let forward_clients_future = forward_clients(untunneled_receiver, "127.0.0.1".parse()?, 8080);
+    let forward_clients_future =
+        forward_clients(untunneled_receiver, args.remote_address, args.remote_port);
     match tokio::try_join!(untunnel_clients_future, forward_clients_future) {
         Ok(_) => Ok(()),
         Err(e) => Err(e),
+    }
+}
+
+async fn new_untunneler(
+    tunnel_type: TunnelType,
+    address: IpAddr,
+    port: u16,
+) -> Result<Box<dyn Untunneler>, Box<dyn Error>> {
+    match tunnel_type {
+        TunnelType::Tcp => Ok(Box::new(TcpUntunneler::new(address, port).await?)),
+        TunnelType::Dns => Ok(Box::new(DnsUntunneler::new(address, port).await?)),
     }
 }
 
@@ -73,16 +84,5 @@ async fn forward_client(mut client: Stream, remote_address: IpAddr, remote_port:
     );
     if let Err(e) = tokio::try_join!(to_tunnel_future, from_tunnel_future) {
         log::error!("failed to forward client: {}", e)
-    }
-}
-
-async fn tcp_server() -> Result<(), Box<dyn Error>> {
-    let mut untunneler = TcpUntunneler::new("127.0.0.1".parse()?, 8899).await?;
-    let (untunneled_sender, untunneled_receiver) = async_channel::unbounded::<Stream>();
-    let untunnel_clients_future = untunneler.untunnel(untunneled_sender);
-    let forward_clients_future = forward_clients(untunneled_receiver, "127.0.0.1".parse()?, 8080);
-    match tokio::try_join!(untunnel_clients_future, forward_clients_future) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
     }
 }
