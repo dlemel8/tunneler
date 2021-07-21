@@ -6,7 +6,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  BASE_IMAGE_NAME: ${{ env.REGISTRY }}/${{ github.repository }}
 
 jobs:
   build-and-publish:
@@ -35,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: ${{ env.BASE_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
           flavor: suffix=${{ matrix.executable }}
 
       - name: Set up Docker Buildx
@@ -49,5 +48,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.BASE_IMAGE_NAME }}:main
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}:main
           cache-to: type=inline
