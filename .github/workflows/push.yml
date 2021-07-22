@@ -29,16 +29,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set base image name
-        run: echo "IMAGE_BASE_NAME=${{ env.REGISTRY }}/${{ github.repository }}" >> $GITHUB_ENV
+      - name: Set env vars
+        run: | 
+          echo "BASE_IMAGE_NAME=${{ env.REGISTRY }}/${{ github.repository }}" >> $GITHUB_ENV
+          echo "BUILDER_IMAGE_NAME=${{ env.BASE_IMAGE_NAME }}-builder" >> $GITHUB_ENV
 
       - name: Build and push Docker builder stage
         uses: docker/build-push-action@v2
         with:
           context: .
           target: builder
-          cache-from: type=registry,ref=${{ env.IMAGE_BASE_NAME }}:main
-          cache-to: type=registry,ref=${{ env.IMAGE_BASE_NAME }}:main,mode=max
+          cache-from: type=registry,ref=${{ env.BUILDER_IMAGE_NAME }}:main
+          cache-to: type=registry,ref=${{ env.BUILDER_IMAGE_NAME }}:main,mode=max
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -49,13 +51,13 @@ jobs:
         run: python3.9 -m pip install -r e2e_tests/requirements.txt
 
       - name: Run e2e tests with pytest
-        run: PYTHONPATH=. CACHE_FROM_REGISTRY=${{ env.IMAGE_BASE_NAME }}:main pytest
+        run: PYTHONPATH=. CACHE_FROM_REGISTRY=${{ env.BUILDER_IMAGE_NAME }}:main pytest
 
       - name: Extract metadata for Docker client image
         id: client-meta
         uses: docker/metadata-action@v3
         with:
-          images: ${{ env.IMAGE_BASE_NAME }}-client
+          images: ${{ env.BASE_IMAGE_NAME }}-client
 
       - name: Build and push Docker client image
         uses: docker/build-push-action@v2
@@ -65,14 +67,14 @@ jobs:
           push: true
           tags: ${{ steps.client-meta.outputs.tags }}
           labels: ${{ steps.client-meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.IMAGE_BASE_NAME }}:main
+          cache-from: type=registry,ref=${{ env.BUILDER_IMAGE_NAME }}:main
           cache-to: type=inline
 
       - name: Extract metadata for Docker server image
         id: server-meta
         uses: docker/metadata-action@v3
         with:
-          images: ${{ env.IMAGE_BASE_NAME }}-server
+          images: ${{ env.BASE_IMAGE_NAME }}-server
 
       - name: Build and push Docker server image
         uses: docker/build-push-action@v2
@@ -82,5 +84,5 @@ jobs:
           push: true
           tags: ${{ steps.server-meta.outputs.tags }}
           labels: ${{ steps.server-meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.IMAGE_BASE_NAME }}:main
+          cache-from: type=registry,ref=${{ env.BUILDER_IMAGE_NAME }}:main
           cache-to: type=inline
