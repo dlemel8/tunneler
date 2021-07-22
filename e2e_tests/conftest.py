@@ -3,6 +3,7 @@ from asyncio import StreamReader, StreamWriter
 from os import getenv
 
 import pytest
+import python_on_whales
 from docker import DockerClient, from_env
 from docker.models.containers import Container
 from docker.models.images import Image
@@ -48,12 +49,13 @@ def docker_client() -> DockerClient:
 
 @pytest.fixture(scope='session')
 def server_image(docker_client: DockerClient) -> Image:
-    cache_from_image = getenv('CACHE_FROM')
-    cache_from = [cache_from_image] if cache_from_image else None
-    image = docker_client.images.build(path='.',
-                                       tag='test_server',
-                                       cache_from=cache_from,
-                                       buildargs={'EXECUTABLE': 'server'})[0]
+    cache_from_registry = getenv('CACHE_FROM_REGISTRY')
+    cache_from = f'type=registry,ref={cache_from_registry}' if cache_from_registry else None
+    image = python_on_whales.docker.build(context_path='.',
+                                          tags='test_server',
+                                          cache_from=cache_from,
+                                          cache_to='type=inline',
+                                          build_args={'EXECUTABLE': 'server'})
 
     yield image
     docker_client.images.remove(image.id, force=True)
@@ -82,12 +84,13 @@ def server_container(docker_client: DockerClient, server_image: Image) -> Contai
 
 @pytest.fixture(scope='session')
 def client_image(docker_client: DockerClient) -> Image:
-    cache_from_image = getenv('CACHE_FROM')
-    cache_from = [cache_from_image] if cache_from_image else None
-    image = docker_client.images.build(path='.',
-                                       tag='test_client',
-                                       cache_from=cache_from,
-                                       buildargs={'EXECUTABLE': 'client'})[0]
+    cache_from_registry = getenv('CACHE_FROM_REGISTRY')
+    cache_from = f'type=registry,ref={cache_from_registry}' if cache_from_registry else None
+    image = python_on_whales.docker.build(context_path='.',
+                                          tags='test_client',
+                                          cache_from=cache_from,
+                                          cache_to='type=inline',
+                                          build_args={'EXECUTABLE': 'client'})
     yield image
     docker_client.images.remove(image.id, force=True)
 

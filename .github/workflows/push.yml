@@ -46,7 +46,7 @@ jobs:
         run: python3.9 -m pip install -r e2e_tests/requirements.txt
 
       - name: Run e2e tests with pytest
-        run: PYTHONPATH=. CACHE_FROM=${{ env.REGISTRY }}/${{ github.repository }}:main pytest
+        run: PYTHONPATH=. CACHE_FROM_REGISTRY=${{ env.REGISTRY }}/${{ github.repository }}:main pytest
 
       - name: Extract metadata for Docker client image
         id: client-meta
@@ -71,7 +71,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-server
 
-      - name: Build and push Docker client image
+      - name: Build and push Docker server image
         uses: docker/build-push-action@v2
         with:
           context: .
