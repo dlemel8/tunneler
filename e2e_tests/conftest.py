@@ -55,6 +55,7 @@ def server_image(docker_client: DockerClient) -> Image:
                                           tags='test_server',
                                           cache_from=cache_from,
                                           cache_to='type=inline',
+                                          load=True,
                                           build_args={'EXECUTABLE': 'server'})
 
     yield image
@@ -90,6 +91,7 @@ def client_image(docker_client: DockerClient) -> Image:
                                           tags='test_client',
                                           cache_from=cache_from,
                                           cache_to='type=inline',
+                                          load=True,
                                           build_args={'EXECUTABLE': 'client'})
     yield image
     docker_client.images.remove(image.id, force=True)
