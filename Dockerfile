@@ -23,4 +23,3 @@ ARG EXECUTABLE=client
 COPY --from=builder /usr/src/target/release/${EXECUTABLE} /app
 
 ENTRYPOINT ["/app"]
-CMD ["--help"]

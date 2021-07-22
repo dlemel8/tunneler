@@ -23,6 +23,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
       - name: Log in to container registry
         uses: docker/login-action@v1
         with:
@@ -30,22 +33,55 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.executable }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Build and push Docker image
+      - name: Build and push Docker builder stage
         uses: docker/build-push-action@v2
         with:
           context: .
-          build-args: EXECUTABLE=${{ matrix.executable }}
+          target: builder
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}:main
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}:main,mode=max
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Install e2e tests dependencies
+        run: python3.9 -m pip install -r e2e_tests/requirements.txt
+
+      - name: Run e2e tests with pytest
+        run: PYTHONPATH=. CACHE_FROM=${{ env.REGISTRY }}/${{ github.repository }}:main pytest
+
+      - name: Extract metadata for Docker client image
+        id: client-meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-client
+
+      - name: Build and push Docker client image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          build-args: EXECUTABLE=client
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.client-meta.outputs.tags }}
+          labels: ${{ steps.client-meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}:main
+          cache-to: type=inline
+
+      - name: Extract metadata for Docker server image
+        id: server-meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-server
+
+      - name: Build and push Docker client image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          build-args: EXECUTABLE=server
+          push: true
+          tags: ${{ steps.server-meta.outputs.tags }}
+          labels: ${{ steps.server-meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}:main
           cache-to: type=inline
