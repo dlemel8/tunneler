@@ -15,10 +15,6 @@ jobs:
       contents: read
       packages: write
 
-    strategy:
-      matrix:
-        executable: [ client, server ]
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
