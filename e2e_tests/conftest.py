@@ -98,6 +98,6 @@ def client_image() -> Image:
 def client_container(client_image: Image) -> Container:
     container = run_tunneler_container(client_image, 'test_client', TestPorts.TUNNELER_PORT, TestPorts.UNTUNNELER_PORT)
     yield container
-    print(f'server {container.logs()=}')
+    print(f'client {container.logs()=}')
     container.kill()
     container.remove(force=True)
