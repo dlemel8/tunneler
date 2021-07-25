@@ -51,3 +51,34 @@ async def test_single_client_single_long_echo(echo_backend_server, server_contai
     await writer.wait_closed()
 
     assert received_message == message_to_send
+
+
+@pytest.mark.asyncio
+async def test_multiple_clients_single_short_echo(echo_backend_server, server_container, client_container) -> None:
+    message_to_send = 'bla'
+    readers, writers = [], []
+    for _ in range(3):
+        reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
+        readers.append(reader)
+        writers.append(writer)
+
+    write_tasks = []
+    for writer in writers:
+        writer.write(message_to_send.encode())
+        write_tasks.append(writer.drain())
+    await asyncio.gather(*write_tasks)
+
+    read_tasks = []
+    for reader in readers:
+        read_tasks.append(reader.readexactly(len(message_to_send)))
+    received_messages = [data.decode() for data in await asyncio.gather(*read_tasks)]
+
+    wait_close_tasks = []
+    for writer in writers:
+        writer.close()
+        wait_close_tasks.append(writer.wait_closed())
+    await asyncio.gather(*wait_close_tasks)
+
+    for message in received_messages:
+        assert message == message_to_send
+

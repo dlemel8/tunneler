@@ -57,8 +57,36 @@ async fn tunnel_clients(
     remote_port: u16,
 ) -> Result<(), Box<dyn Error>> {
     while let Ok(client) = clients.recv().await {
-        let mut tunnel = new_tunneler(tunnel_type, remote_address, remote_port).await?;
-        tunnel.tunnel(client).await?
+        tokio::spawn(tunnel_client(
+            client,
+            tunnel_type,
+            remote_address,
+            remote_port,
+        ));
     }
     Ok(())
+}
+
+async fn tunnel_client(
+    client: Stream,
+    tunnel_type: TunnelType,
+    remote_address: IpAddr,
+    remote_port: u16,
+) {
+    let mut tunnel = match new_tunneler(tunnel_type, remote_address, remote_port).await {
+        Ok(t) => t,
+        Err(e) => {
+            log::error!(
+                "failed to create {} tunnel to {}:{}: {}",
+                tunnel_type,
+                remote_address,
+                remote_port,
+                e
+            );
+            return;
+        }
+    };
+    if let Err(e) = tunnel.tunnel(client).await {
+        log::error!("failed to tunnel client: {}", e);
+    }
 }

@@ -6,8 +6,8 @@ use tokio::net::TcpStream;
 
 use common::io::{copy, Stream};
 
-#[async_trait(?Send)]
-pub(crate) trait Tunneler {
+#[async_trait]
+pub(crate) trait Tunneler: Send {
     async fn tunnel(&mut self, mut client: Stream) -> Result<(), Box<dyn Error>>;
 }
 
@@ -27,7 +27,7 @@ impl TcpTunneler {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl Tunneler for TcpTunneler {
     async fn tunnel(&mut self, mut client: Stream) -> Result<(), Box<dyn Error>> {
         let to_tunnel_future = copy(

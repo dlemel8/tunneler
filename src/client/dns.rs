@@ -73,7 +73,7 @@ impl DnsTunneler {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl Tunneler for DnsTunneler {
     async fn tunnel(&mut self, mut client: Stream) -> Result<(), Box<dyn Error>> {
         let mut data_to_tunnel = vec![0; MAXIMUM_LABEL_SIZE];
