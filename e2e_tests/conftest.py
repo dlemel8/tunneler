@@ -58,6 +58,7 @@ def build_tunneler_image(executable: str, image_name: str) -> Image:
 
 def run_tunneler_container(image: Image,
                            container_name: str,
+                           tunnel_type: str,
                            local_port: Union[TestPorts, int],
                            remote_port: TestPorts) -> Container:
     if isinstance(local_port, TestPorts):
@@ -72,7 +73,7 @@ def run_tunneler_container(image: Image,
         name=container_name,
         detach=True,
         envs={
-            'TUNNEL_TYPE': 'Dns',
+            'TUNNEL_TYPE': tunnel_type,
             'LOCAL_PORT': local_port_value,
             'REMOTE_PORT': remote_port.value,
             'REMOTE_ADDRESS': '127.0.0.1',
@@ -90,8 +91,17 @@ def server_image() -> Image:
 
 
 @pytest.fixture
-def server_container(server_image: Image) -> Container:
-    container = run_tunneler_container(server_image, 'test_server', TestPorts.UNTUNNELER_PORT, TestPorts.BACKEND_PORT)
+def dns_server_container(server_image: Image) -> Container:
+    container = run_tunneler_container(server_image, 'test_server', 'Dns', TestPorts.UNTUNNELER_PORT, TestPorts.BACKEND_PORT)
+    yield container
+    print(f'server {container.logs()=}')
+    container.kill()
+    container.remove(force=True)
+
+
+@pytest.fixture
+def tcp_server_container(server_image: Image) -> Container:
+    container = run_tunneler_container(server_image, 'test_server', 'Tcp', TestPorts.UNTUNNELER_PORT, TestPorts.BACKEND_PORT)
     yield container
     print(f'server {container.logs()=}')
     container.kill()
@@ -106,8 +116,17 @@ def client_image() -> Image:
 
 
 @pytest.fixture
-def client_container(client_image: Image) -> Container:
-    container = run_tunneler_container(client_image, 'test_client', TestPorts.TUNNELER_PORT, TestPorts.UNTUNNELER_PORT)
+def dns_client_container(client_image: Image) -> Container:
+    container = run_tunneler_container(client_image, 'test_client', 'Dns', TestPorts.TUNNELER_PORT, TestPorts.UNTUNNELER_PORT)
+    yield container
+    print(f'client {container.logs()=}')
+    container.kill()
+    container.remove(force=True)
+
+
+@pytest.fixture
+def tcp_client_container(client_image: Image) -> Container:
+    container = run_tunneler_container(client_image, 'test_client', 'Tcp', TestPorts.TUNNELER_PORT, TestPorts.UNTUNNELER_PORT)
     yield container
     print(f'client {container.logs()=}')
     container.kill()
