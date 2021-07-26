@@ -1,25 +1,27 @@
-FROM rust:1.53.0-alpine3.13 as builder
+FROM rust:1.53.0-alpine3.13 as base
+WORKDIR app
+RUN apk add musl-dev && \
+    cargo install cargo-chef --version 0.1.22 && \
+    rustup component add clippy rustfmt
 
-RUN apk add musl-dev && rustup component add clippy rustfmt
+FROM base as planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-WORKDIR /usr/src/
+FROM base as cacher
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 
-# dummy build to cache dependencies
-RUN cargo init --lib && \
-    mkdir src/common && \
-    mv src/lib.rs src/common
-COPY Cargo.lock Cargo.toml ./
-RUN cargo build --release --lib
-
-COPY src src
+FROM base as builder
+COPY . .
+COPY --from=cacher /app/target target
+COPY --from=cacher /usr/local/cargo /usr/local/cargo
 RUN cargo clippy -- -D warnings && \
     cargo fmt --all -- --check && \
-    cargo test --all-targets && \
-    touch src/common/lib.rs && cargo build --release
+    cargo test --locked --offline --all-targets && \
+    cargo build --locked --offline --release
 
 FROM alpine:3.13
-
 ARG EXECUTABLE=client
-COPY --from=builder /usr/src/target/release/${EXECUTABLE} /app
-
+COPY --from=builder /app/target/release/${EXECUTABLE} /app
 ENTRYPOINT ["/app"]
