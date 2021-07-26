@@ -2,6 +2,7 @@ import asyncio
 from asyncio import StreamReader, StreamWriter
 from enum import Enum
 from os import getenv
+from typing import Union
 
 import pytest
 from python_on_whales import docker, Image, Container
@@ -55,14 +56,24 @@ def build_tunneler_image(executable: str, image_name: str) -> Image:
     )
 
 
-def run_tunneler_container(image: Image, container_name: str, local_port: TestPorts, remote_port: TestPorts) -> Container:
+def run_tunneler_container(image: Image,
+                           container_name: str,
+                           local_port: Union[TestPorts, int],
+                           remote_port: TestPorts) -> Container:
+    if isinstance(local_port, TestPorts):
+        local_port_value = local_port.value
+    elif isinstance(local_port, int):
+        local_port_value = local_port
+    else:
+        raise ValueError(f'unsupported local port type %s', type(local_port))
+
     return docker.run(
         image,
         name=container_name,
         detach=True,
         envs={
             'TUNNEL_TYPE': 'Dns',
-            'LOCAL_PORT': local_port.value,
+            'LOCAL_PORT': local_port_value,
             'REMOTE_PORT': remote_port.value,
             'REMOTE_ADDRESS': '127.0.0.1',
             'LOG_LEVEL': 'debug',
