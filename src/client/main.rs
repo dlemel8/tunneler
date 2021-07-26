@@ -77,7 +77,7 @@ async fn tunnel_client(
         Ok(t) => t,
         Err(e) => {
             log::error!(
-                "XXXfailed to create {} tunnel to {}:{}: {}",
+                "failed to create {} tunnel to {}:{}: {}",
                 tunnel_type,
                 remote_address,
                 remote_port,
