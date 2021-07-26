@@ -4,11 +4,18 @@ RUN apk add musl-dev && rustup component add clippy rustfmt
 
 WORKDIR /usr/src/
 
-COPY . .
+# dummy build to cache dependencies
+RUN cargo init --lib && \
+    mkdir src/common && \
+    mv src/lib.rs src/common
+COPY Cargo.lock Cargo.toml ./
+RUN cargo build --release --lib
+
+COPY src src
 RUN cargo clippy -- -D warnings && \
     cargo fmt --all -- --check && \
     cargo test --all-targets && \
-    touch src/client/main.rs src/common/lib.rs src/client/main.rs && cargo build --release
+    touch src/common/lib.rs && cargo build --release
 
 FROM alpine:3.13
 
