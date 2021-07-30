@@ -13,6 +13,8 @@ use async_trait::async_trait;
 use mockall::automock;
 use tokio::io::{duplex, split};
 use tokio::net::UdpSocket;
+use tokio::time::timeout;
+use tokio::time::{Duration, Instant};
 use trust_dns_client::op::{Header, MessageType, OpCode};
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
@@ -28,7 +30,6 @@ use common::io::Stream;
 
 use crate::io::{StreamCreator, StreamsCache};
 use crate::tunnel::Untunneler;
-use tokio::time::{Duration, Instant};
 
 pub(crate) struct DnsUntunneler {
     listener_address: SocketAddr,
@@ -205,7 +206,7 @@ async fn untunnel_data<F: StreamCreator>(
     message_id: u16,
     data_to_tunnel_max_size: usize,
 ) -> Option<Vec<u8>> {
-    if data.len() < CLIENT_ID_SIZE_IN_BYTES + 1 {
+    if data.len() < CLIENT_ID_SIZE_IN_BYTES {
         log::error!(
             "{}: decode return value too small: {}",
             message_id,
@@ -229,7 +230,20 @@ async fn untunnel_data<F: StreamCreator>(
     };
 
     let mut data_to_tunnel = vec![0; data_to_tunnel_max_size];
-    let size = match client.lock().await.reader.read(&mut data_to_tunnel).await {
+    let read_result = match timeout(
+        Duration::from_millis(100),
+        client.lock().await.reader.read(&mut data_to_tunnel),
+    )
+    .await
+    {
+        Ok(x) => x,
+        Err(_) => {
+            data_to_tunnel.truncate(0);
+            return Some(data_to_tunnel);
+        }
+    };
+
+    let size = match read_result {
         Ok(x) => x,
         Err(e) => {
             log::error!("failed to read from client: {}", e);
@@ -272,6 +286,7 @@ mod tests {
     use std::net::Ipv4Addr;
 
     use mockall::mock;
+    use tokio::io::ErrorKind;
     use tokio_test::io::Builder;
     use trust_dns_client::op::Message;
     use trust_dns_client::proto::serialize::binary::BinDecodable;
@@ -279,7 +294,6 @@ mod tests {
     use trust_dns_server::proto::op::Query;
 
     use super::*;
-    use tokio::io::ErrorKind;
 
     mock! {
         Encoder{}

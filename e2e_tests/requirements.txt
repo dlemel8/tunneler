@@ -1,3 +1,4 @@
+aioredis==2.0.0
 pytest==6.2.4
 pytest-asyncio==0.15.1
 python-on-whales==0.23.0

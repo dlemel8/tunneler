@@ -62,14 +62,13 @@ impl<E: Encoder> Encoder for ClientIdSuffixEncoder<E> {
     }
 
     fn encode(&self, data: &[u8]) -> Result<String, Box<dyn Error>> {
-        if data.len() < CLIENT_ID_SIZE_IN_BYTES + 1 {
+        if data.len() < CLIENT_ID_SIZE_IN_BYTES {
             return Err(String::from("not enough data to encode").into());
         }
 
         let (data, client_id) = data.split_at(data.len() - CLIENT_ID_SIZE_IN_BYTES);
         let mut res = self.encoder.encode(data)?;
         let encoded_client_id = std::str::from_utf8(client_id).unwrap();
-        println!("{:?}   {:?}", data, client_id);
         res.push_str(encoded_client_id);
         Ok(res)
     }
@@ -87,7 +86,7 @@ impl<D: Decoder> ClientIdSuffixDecoder<D> {
 
 impl<D: Decoder> Decoder for ClientIdSuffixDecoder<D> {
     fn decode(&self, data: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-        if data.len() < CLIENT_ID_SIZE_IN_BYTES + 1 {
+        if data.len() < CLIENT_ID_SIZE_IN_BYTES {
             return Err(String::from("not enough data to decode").into());
         }
 

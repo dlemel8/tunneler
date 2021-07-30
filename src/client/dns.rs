@@ -6,6 +6,7 @@ use async_trait::async_trait;
 #[cfg(test)]
 use mockall::automock;
 use tokio::net::UdpSocket;
+use tokio::time::{timeout, Duration, Instant};
 use trust_dns_client::client::{AsyncClient, ClientHandle};
 use trust_dns_client::op::DnsResponse;
 use trust_dns_client::proto::rr::Name;
@@ -56,6 +57,9 @@ pub(crate) struct DnsTunneler {
     client_id: ClientId,
     client: Box<dyn AsyncDnsClient>,
     decoder: Box<dyn Decoder>,
+    read_timeout: Duration,
+    idle_timeout: Duration,
+    last_received_bytes: Instant,
 }
 
 impl DnsTunneler {
@@ -69,6 +73,9 @@ impl DnsTunneler {
             client_id: new_client_id(),
             client: Box::new(AsyncClientWrapper { client }),
             decoder: Box::new(HexDecoder {}),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_secs(30),
+            last_received_bytes: Instant::now(),
         })
     }
 }
@@ -85,11 +92,22 @@ impl Tunneler for DnsTunneler {
             let size = self
                 .read_data_to_tunnel(&mut client.reader, &mut data_to_tunnel, read_limit)
                 .await?;
-            if size == 0 {
-                break;
+
+            let now = Instant::now();
+            match size {
+                0 => {
+                    if now - self.last_received_bytes > self.idle_timeout {
+                        break;
+                    }
+                }
+                _ => self.last_received_bytes = now,
             }
 
-            let encoded_data_to_tunnel = self.encoder.encode(&data_to_tunnel[..size])?;
+            data_to_tunnel[size..size + self.client_id.len()].copy_from_slice(&self.client_id);
+
+            let encoded_data_to_tunnel = self
+                .encoder
+                .encode(&data_to_tunnel[..size + self.client_id.len()])?;
             log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
             let encoded_data_from_tunnel = self.send_dns_query(encoded_data_to_tunnel).await?;
 
@@ -108,15 +126,22 @@ impl DnsTunneler {
         data_to_tunnel: &mut Vec<u8>,
         max_decoded_size: usize,
     ) -> Result<usize, Box<dyn Error>> {
-        let size = to_tunnel
-            .read(&mut data_to_tunnel[..max_decoded_size])
-            .await?;
-        if size == 0 {
-            return Ok(0);
-        }
+        let read_result = match timeout(
+            self.read_timeout,
+            to_tunnel.read(&mut data_to_tunnel[..max_decoded_size]),
+        )
+        .await
+        {
+            Ok(x) => x,
+            Err(_) => {
+                return Ok(0);
+            }
+        };
 
-        data_to_tunnel[size..size + self.client_id.len()].copy_from_slice(&self.client_id);
-        Ok(size + self.client_id.len())
+        match read_result {
+            Ok(x) => Ok(x),
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn send_dns_query(
@@ -178,15 +203,15 @@ mod tests {
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock
-            .expect_encode()
-            .returning(|_| Ok(String::from("encoded")));
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
             client_id: [1, 2, 3, 4],
             client: Box::new(MockAsyncDnsClient::new()),
             decoder: Box::new(MockDecoder::new()),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(
@@ -202,20 +227,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dns_read_end_of_file() -> Result<(), Box<dyn Error>> {
+    async fn dns_read_no_bytes_after_idle_time() -> Result<(), Box<dyn Error>> {
         let mut encoder_mock = MockEncoder::new();
         encoder_mock
             .expect_calculate_max_decoded_size()
             .return_const(17 as usize);
-        encoder_mock
-            .expect_encode()
-            .returning(|_| Ok(String::from("encoded")));
 
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
             client_id: [1, 2, 3, 4],
             client: Box::new(MockAsyncDnsClient::new()),
             decoder: Box::new(MockDecoder::new()),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(Builder::new().build(), Builder::new().build());
@@ -238,11 +263,16 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(MockAsyncDnsClient::new()),
             decoder: Box::new(MockDecoder::new()),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
-        let client = Stream::new(Builder::new().build(), Builder::new().build());
+        let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
 
-        tunneler.tunnel(client).await
+        let result = tunneler.tunnel(client).await;
+        assert!(result.is_err());
+        Ok(())
     }
 
     #[tokio::test]
@@ -265,6 +295,9 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
@@ -294,6 +327,9 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
@@ -325,6 +361,9 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
@@ -357,6 +396,9 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(MockDecoder::new()),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
@@ -395,6 +437,9 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(Builder::new().read(b"bla").build(), Builder::new().build());
@@ -433,6 +478,9 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(
@@ -471,11 +519,15 @@ mod tests {
             .expect_decode()
             .returning(|_| Ok(String::from("decoded").into_bytes()));
 
+        let now = Instant::now();
         let mut tunneler = DnsTunneler {
             encoder: Box::new(encoder_mock),
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
+            last_received_bytes: now,
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(
@@ -483,7 +535,9 @@ mod tests {
             Builder::new().write(b"decoded").build(),
         );
 
-        tunneler.tunnel(client).await
+        tunneler.tunnel(client).await?;
+        assert!(tunneler.last_received_bytes > now);
+        Ok(())
     }
 
     #[tokio::test]
@@ -515,6 +569,9 @@ mod tests {
             client_id: [1, 2, 3, 4],
             client: Box::new(client_mock),
             decoder: Box::new(decoder_mock),
+            last_received_bytes: Instant::now(),
+            read_timeout: Duration::from_millis(100),
+            idle_timeout: Duration::from_millis(0),
         };
 
         let client = Stream::new(

@@ -1,5 +1,6 @@
 import asyncio
 
+import aioredis
 import pytest
 
 from e2e_tests.conftest import TestPorts, run_tunneler_container
@@ -122,3 +123,10 @@ async def test_multiple_tunnels_single_short_echo(echo_backend_server, dns_serve
         print(f'another client {container.logs()=}')
         container.kill()
         container.remove(force=True)
+
+
+@pytest.mark.asyncio
+async def test_server_long_response_and_empty_acks(redis_backend_server, dns_server_container, dns_client_container) -> None:
+    redis = aioredis.from_url(f'redis://127.0.0.1:{TestPorts.TUNNELER_PORT.value}/0')
+    result = await redis.info()
+    assert result

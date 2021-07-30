@@ -43,6 +43,20 @@ async def echo_backend_server():
         await server.wait_closed()
 
 
+@pytest.fixture
+async def redis_backend_server():
+    container = docker.run(
+        'redis:6.0.12-alpine',
+        name='redis_server',
+        detach=True,
+        publish=[(TestPorts.BACKEND_PORT.value, 6379)]
+    )
+    yield container
+    print(f'redis server {container.logs()=}')
+    container.kill()
+    container.remove(force=True)
+
+
 def build_tunneler_image(executable: str, image_name: str) -> Image:
     cache_from_registry = getenv('CACHE_FROM_REGISTRY')
     cache_from = f'type=registry,ref={cache_from_registry}' if cache_from_registry else None
