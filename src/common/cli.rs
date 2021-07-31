@@ -1,18 +1,21 @@
 use std::net::IpAddr;
 
-use structopt::{clap::arg_enum, StructOpt};
+use structopt::StructOpt;
 
-arg_enum! {
-    #[derive(Debug, Copy, Clone)]
-    pub enum TunnelType {
-        Tcp,
-        Dns,
-    }
+#[derive(StructOpt, Debug, Copy, Clone)]
+pub enum TunnelType {
+    Tcp,
+    Dns {
+        #[structopt(env)]
+        read_timeout_in_milliseconds: u64,
+        #[structopt(env)]
+        idle_client_timeout_in_milliseconds: u64,
+    },
 }
 
 #[derive(StructOpt, Debug)]
 pub struct Cli {
-    #[structopt(env, possible_values = & TunnelType::variants(), case_insensitive = true)]
+    #[structopt(subcommand)]
     pub tunnel_type: TunnelType,
 
     #[structopt(env)]

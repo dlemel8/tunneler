@@ -2,7 +2,7 @@ import asyncio
 from asyncio import StreamReader, StreamWriter
 from enum import Enum
 from os import getenv
-from typing import Union
+from typing import Union, Dict, Any, Optional
 
 import pytest
 from python_on_whales import docker, Image, Container
@@ -12,6 +12,11 @@ class TestPorts(Enum):
     BACKEND_PORT = 8080
     UNTUNNELER_PORT = 8899
     TUNNELER_PORT = 8888
+
+
+class TunnelType(Enum):
+    TCP = 'tcp'
+    DNS = 'dns'
 
 
 async def echo_handler(reader: StreamReader, writer: StreamWriter) -> None:
@@ -72,9 +77,10 @@ def build_tunneler_image(executable: str, image_name: str) -> Image:
 
 def run_tunneler_container(image: Image,
                            container_name: str,
-                           tunnel_type: str,
+                           tunnel_type: TunnelType,
                            local_port: Union[TestPorts, int],
-                           remote_port: TestPorts) -> Container:
+                           remote_port: TestPorts,
+                           extra_env_vars: Optional[Dict[str, Any]] = None) -> Container:
     if isinstance(local_port, TestPorts):
         local_port_value = local_port.value
     elif isinstance(local_port, int):
@@ -82,16 +88,19 @@ def run_tunneler_container(image: Image,
     else:
         raise ValueError(f'unsupported local port type %s', type(local_port))
 
+    extra_env_vars = extra_env_vars or {}
+
     return docker.run(
         image,
+        [tunnel_type.value],
         name=container_name,
         detach=True,
         envs={
-            'TUNNEL_TYPE': tunnel_type,
             'LOCAL_PORT': local_port_value,
             'REMOTE_PORT': remote_port.value,
             'REMOTE_ADDRESS': '127.0.0.1',
             'LOG_LEVEL': 'debug',
+            **extra_env_vars,
         },
         networks=['host'],
     )
@@ -106,7 +115,13 @@ def server_image() -> Image:
 
 @pytest.fixture
 def dns_server_container(server_image: Image) -> Container:
-    container = run_tunneler_container(server_image, 'test_server', 'Dns', TestPorts.UNTUNNELER_PORT, TestPorts.BACKEND_PORT)
+    container = run_tunneler_container(server_image,
+                                       'test_server',
+                                       TunnelType.DNS,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       TestPorts.BACKEND_PORT,
+                                       extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300000})
     yield container
     print(f'server {container.logs()=}')
     container.kill()
@@ -115,7 +130,11 @@ def dns_server_container(server_image: Image) -> Container:
 
 @pytest.fixture
 def tcp_server_container(server_image: Image) -> Container:
-    container = run_tunneler_container(server_image, 'test_server', 'Tcp', TestPorts.UNTUNNELER_PORT, TestPorts.BACKEND_PORT)
+    container = run_tunneler_container(server_image,
+                                       'test_server',
+                                       TunnelType.TCP,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       TestPorts.BACKEND_PORT)
     yield container
     print(f'server {container.logs()=}')
     container.kill()
@@ -131,7 +150,13 @@ def client_image() -> Image:
 
 @pytest.fixture
 def dns_client_container(client_image: Image) -> Container:
-    container = run_tunneler_container(client_image, 'test_client', 'Dns', TestPorts.TUNNELER_PORT, TestPorts.UNTUNNELER_PORT)
+    container = run_tunneler_container(client_image,
+                                       'test_client',
+                                       TunnelType.DNS,
+                                       TestPorts.TUNNELER_PORT,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000})
     yield container
     print(f'client {container.logs()=}')
     container.kill()
@@ -140,7 +165,11 @@ def dns_client_container(client_image: Image) -> Container:
 
 @pytest.fixture
 def tcp_client_container(client_image: Image) -> Container:
-    container = run_tunneler_container(client_image, 'test_client', 'Tcp', TestPorts.TUNNELER_PORT, TestPorts.UNTUNNELER_PORT)
+    container = run_tunneler_container(client_image,
+                                       'test_client',
+                                       TunnelType.TCP,
+                                       TestPorts.TUNNELER_PORT,
+                                       TestPorts.UNTUNNELER_PORT)
     yield container
     print(f'client {container.logs()=}')
     container.kill()

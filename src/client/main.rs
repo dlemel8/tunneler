@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::net::IpAddr;
+use std::time::Duration;
 
 use async_channel::Receiver;
 use simple_logger::SimpleLogger;
@@ -46,7 +47,18 @@ async fn new_tunneler(
 ) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
     match tunnel_type {
         TunnelType::Tcp => Ok(Box::new(TcpTunneler::new(address, port).await?)),
-        TunnelType::Dns => Ok(Box::new(DnsTunneler::new(address, port).await?)),
+        TunnelType::Dns {
+            read_timeout_in_milliseconds,
+            idle_client_timeout_in_milliseconds,
+        } => Ok(Box::new(
+            DnsTunneler::new(
+                address,
+                port,
+                Duration::from_millis(read_timeout_in_milliseconds),
+                Duration::from_millis(idle_client_timeout_in_milliseconds),
+            )
+            .await?,
+        )),
     }
 }
 
@@ -77,7 +89,7 @@ async fn tunnel_client(
         Ok(t) => t,
         Err(e) => {
             log::error!(
-                "failed to create {} tunnel to {}:{}: {}",
+                "failed to create {:?} tunnel to {}:{}: {}",
                 tunnel_type,
                 remote_address,
                 remote_port,

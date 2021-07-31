@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::net::IpAddr;
+use std::time::Duration;
 
 use async_channel::Receiver;
 use simple_logger::SimpleLogger;
@@ -44,7 +45,18 @@ async fn new_untunneler(
 ) -> Result<Box<dyn Untunneler>, Box<dyn Error>> {
     match tunnel_type {
         TunnelType::Tcp => Ok(Box::new(TcpUntunneler::new(address, port).await?)),
-        TunnelType::Dns => Ok(Box::new(DnsUntunneler::new(address, port).await?)),
+        TunnelType::Dns {
+            read_timeout_in_milliseconds,
+            idle_client_timeout_in_milliseconds,
+        } => Ok(Box::new(
+            DnsUntunneler::new(
+                address,
+                port,
+                Duration::from_millis(read_timeout_in_milliseconds),
+                Duration::from_millis(idle_client_timeout_in_milliseconds),
+            )
+            .await?,
+        )),
     }
 }
 

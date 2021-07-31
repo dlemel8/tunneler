@@ -33,15 +33,23 @@ use crate::tunnel::Untunneler;
 
 pub(crate) struct DnsUntunneler {
     listener_address: SocketAddr,
+    read_timeout: Duration,
+    idle_client_timeout: Duration,
 }
 
 impl DnsUntunneler {
     pub(crate) async fn new(
         local_address: IpAddr,
         local_port: u16,
+        read_timeout: Duration,
+        idle_client_timeout: Duration,
     ) -> Result<Self, Box<dyn Error>> {
         let listener_address = SocketAddr::new(local_address, local_port);
-        Ok(Self { listener_address })
+        Ok(Self {
+            listener_address,
+            read_timeout,
+            idle_client_timeout,
+        })
     }
 }
 
@@ -58,12 +66,12 @@ impl Untunneler for DnsUntunneler {
                 let (local_reader, local_writer) = split(local);
                 Ok(Stream::new(local_reader, local_writer))
             },
-            Duration::from_secs(3 * 60),
+            self.idle_client_timeout,
             Duration::from_secs(60),
         );
 
         let udp_socket = UdpSocket::bind(self.listener_address).await?;
-        let mut server = ServerFuture::new(UntunnelRequestHandler::new(cache));
+        let mut server = ServerFuture::new(UntunnelRequestHandler::new(cache, self.read_timeout));
         server.register_socket(udp_socket);
         match server.block_until_done().await {
             Ok(_) => Ok(()),
@@ -92,12 +100,14 @@ const MAXIMUM_TXT_RECORD_SIZE: usize = 54;
 
 pub struct UntunnelRequestHandler<F: StreamCreator> {
     untunneled_clients: Arc<StreamsCache<F, ClientId>>,
+    read_timeout: Duration,
 }
 
 impl<F: StreamCreator> UntunnelRequestHandler<F> {
-    pub(crate) fn new(cache: StreamsCache<F, ClientId>) -> Self {
+    pub(crate) fn new(cache: StreamsCache<F, ClientId>, read_timeout: Duration) -> Self {
         Self {
             untunneled_clients: Arc::new(cache),
+            read_timeout,
         }
     }
 }
@@ -118,6 +128,7 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
             self.untunneled_clients.clone(),
             ClientIdSuffixDecoder::new(HexDecoder {}),
             HexEncoder {},
+            self.read_timeout,
         ))
     }
 }
@@ -128,6 +139,7 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     untunneled_clients: Arc<StreamsCache<F, ClientId>>,
     decoder: D,
     encoder: E,
+    read_timeout: Duration,
 ) {
     let message = &request.message;
     let encoded_data_from_tunnel = match get_data_from_tunnel(message) {
@@ -149,6 +161,7 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         data_from_tunnel,
         message.id(),
         encoder.calculate_max_decoded_size(MAXIMUM_TXT_RECORD_SIZE),
+        read_timeout,
     )
     .await
     {
@@ -205,6 +218,7 @@ async fn untunnel_data<F: StreamCreator>(
     data: Vec<u8>,
     message_id: u16,
     data_to_tunnel_max_size: usize,
+    read_timeout: Duration,
 ) -> Option<Vec<u8>> {
     if data.len() < CLIENT_ID_SIZE_IN_BYTES {
         log::error!(
@@ -231,7 +245,7 @@ async fn untunnel_data<F: StreamCreator>(
 
     let mut data_to_tunnel = vec![0; data_to_tunnel_max_size];
     let read_result = match timeout(
-        Duration::from_millis(100),
+        read_timeout,
         client.lock().await.reader.read(&mut data_to_tunnel),
     )
     .await
@@ -336,6 +350,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -370,6 +385,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -402,6 +418,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -439,6 +456,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -479,6 +497,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -519,6 +538,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -566,6 +586,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -613,6 +634,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -661,6 +683,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -712,6 +735,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())
@@ -761,6 +785,7 @@ mod tests {
             Arc::new(cache),
             decoder_mock,
             encoder_mock,
+            Duration::from_millis(100),
         )
         .await;
         Ok(())

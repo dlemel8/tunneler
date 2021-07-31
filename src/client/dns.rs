@@ -63,7 +63,12 @@ pub(crate) struct DnsTunneler {
 }
 
 impl DnsTunneler {
-    pub(crate) async fn new(address: IpAddr, port: u16) -> Result<Self, Box<dyn Error>> {
+    pub(crate) async fn new(
+        address: IpAddr,
+        port: u16,
+        read_timeout: Duration,
+        idle_timeout: Duration,
+    ) -> Result<Self, Box<dyn Error>> {
         let socket = SocketAddr::new(address, port);
         let stream = UdpClientStream::<UdpSocket>::new(socket);
         let (client, background) = AsyncClient::connect(stream).await?;
@@ -73,8 +78,8 @@ impl DnsTunneler {
             client_id: new_client_id(),
             client: Box::new(AsyncClientWrapper { client }),
             decoder: Box::new(HexDecoder {}),
-            read_timeout: Duration::from_millis(100),
-            idle_timeout: Duration::from_secs(30),
+            read_timeout,
+            idle_timeout,
             last_received_bytes: Instant::now(),
         })
     }

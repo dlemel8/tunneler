@@ -3,7 +3,7 @@ import asyncio
 import aioredis
 import pytest
 
-from e2e_tests.conftest import TestPorts, run_tunneler_container
+from e2e_tests.conftest import TestPorts, run_tunneler_container, TunnelType
 
 
 @pytest.mark.asyncio
@@ -88,9 +88,12 @@ async def test_multiple_clients_single_short_echo(echo_backend_server, dns_serve
 async def test_multiple_tunnels_single_short_echo(echo_backend_server, dns_server_container, client_image, dns_client_container) -> None:
     container = run_tunneler_container(client_image,
                                        'test_another_client',
-                                       'Dns',
+                                       TunnelType.DNS,
                                        TestPorts.TUNNELER_PORT.value + 1,
-                                       TestPorts.UNTUNNELER_PORT)
+                                       TestPorts.UNTUNNELER_PORT,
+                                       extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000})
+
     try:
         message_to_send = 'bla'
         readers, writers = [], []
