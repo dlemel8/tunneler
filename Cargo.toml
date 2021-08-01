@@ -12,8 +12,9 @@ simple_logger = "1.11.0"
 tokio = { version = "1.4.0", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
 async-trait = "0.1.50"
-trust-dns-client = { version = "*", default-features = false }
+trust-dns-client = { version = "0.20.3", default-features = false }
 trust-dns-server = "0.20.3"
+trust-dns-resolver = "0.20.3"
 hex = "0.4"
 async-channel = "1.6.1"
 rand = "0.8.4"

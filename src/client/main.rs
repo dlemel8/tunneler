@@ -15,18 +15,24 @@ use crate::tunnel::{TcpTunneler, Tunneler};
 mod dns;
 mod tunnel;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let args: Cli = Cli::from_args();
+
     SimpleLogger::new()
         .with_level(args.log_level)
         .init()
         .unwrap();
     log::debug!("start client - args are {:?}", args);
 
+    start_client(args)
+}
+
+#[tokio::main]
+async fn start_client(args: Cli ) -> Result<(), Box<dyn Error>> {
     // TODO - support both TCP and UDP?
     let mut server = TcpServer::new(args.local_address, args.local_port).await?;
     let (clients_sender, clients_receiver) = async_channel::unbounded::<Stream>();
+
     let accept_clients_future = server.accept_clients(clients_sender);
     let tunnel_clients_future = tunnel_clients(
         clients_receiver,

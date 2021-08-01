@@ -17,18 +17,24 @@ mod dns;
 mod io;
 mod tunnel;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let args: Cli = Cli::from_args();
+
     SimpleLogger::new()
         .with_level(args.log_level)
         .init()
         .unwrap();
     log::debug!("start server - args are {:?}", args);
 
+    start_server(args)
+}
+
+#[tokio::main]
+async fn start_server(args: Cli) -> Result<(), Box<dyn Error>> {
     let mut untunneler =
         new_untunneler(args.tunnel_type, args.local_address, args.local_port).await?;
     let (untunneled_sender, untunneled_receiver) = async_channel::unbounded::<Stream>();
+
     let untunnel_clients_future = untunneler.untunnel(untunneled_sender);
     let forward_clients_future =
         forward_clients(untunneled_receiver, args.remote_address, args.remote_port);
