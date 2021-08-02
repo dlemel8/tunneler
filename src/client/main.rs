@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[tokio::main]
-async fn start_client(args: Cli ) -> Result<(), Box<dyn Error>> {
+async fn start_client(args: Cli) -> Result<(), Box<dyn Error>> {
     // TODO - support both TCP and UDP?
     let mut server = TcpServer::new(args.local_address, args.local_port).await?;
     let (clients_sender, clients_receiver) = async_channel::unbounded::<Stream>();

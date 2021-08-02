@@ -23,7 +23,7 @@ fn parse_or_resolve_ip(src: &str) -> Result<IpAddr, Box<dyn Error>> {
         response
             .iter()
             .next()
-            .ok_or(format!("failed to parse or resolve {} to an IP", src).into())
+            .ok_or_else(|| format!("failed to parse or resolve {} to an IP", src).into())
     })
 }
 
