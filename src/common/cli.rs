@@ -18,7 +18,7 @@ pub enum TunnelType {
 
 fn parse_or_resolve_ip(src: &str) -> Result<IpAddr, Box<dyn Error>> {
     IpAddr::from_str(src).or_else(|_| {
-        let resolver = Resolver::default()?;
+        let resolver = Resolver::from_system_conf()?;
         let response = resolver.lookup_ip(src)?;
         response
             .iter()
