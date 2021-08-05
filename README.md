@@ -49,9 +49,9 @@ This repo contains a [docker compose file](docker-compose.server.yml) with the f
 ## Protocols
 ### DNS tunneling
 We have a few challenges here:
-* Every message requires a response before we can send next message
-* DNS payload must be alphanumeric
-* DNS Untunneler translates UDP packets to TCP, so we need a way to identify existing clients to continue their sessions
+* DNS Untunneler translates UDP packets to TCP, so we need a way to identify existing clients to continue their sessions.
+* DNS payload must be alphanumeric.
+* Every message requires a response before we can send next message.
 
 To solve those challenges, each client session starts with generating a random Client ID. Client reads data to tunnel 
 and run it via a composition of encoders: 
@@ -62,6 +62,10 @@ Final data is then embedded in a DNS query name, requesting TXT record.
 
 Server extracts original data and get or create Client ID in an in-memory Clients Cache. Clients Cache maps Client ID 
 into in-memory reader and writer. Original data is then forwarded using TCP to target service.
+
+In order to handle large server responses and empty TCP ACKs, read timeout is used in both client and server. If read 
+timeout is expired, empty message will be sent. Both client and server use idle timeout to stop forwarding and cleanup 
+local resources.
 
 ### TCP proxy
 Currently, only TCP listener and forwarder are supported, so nothing is special here.
