@@ -1,4 +1,4 @@
-name: Build and Publish Tagged Docker images, Rust Crate and Github Release
+name: Build and publish tagged Docker images, Rust Crate and Github Release
 
 on:
   push:
@@ -34,17 +34,6 @@ jobs:
 
       - name: Set builder image name
         run: echo "BUILDER_IMAGE_NAME=${{ env.BASE_IMAGE_NAME }}-builder" >> $GITHUB_ENV
-
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
-
-      - name: Install e2e tests dependencies
-        run: python3.9 -m pip install -r e2e_tests/requirements.txt
-
-      - name: Run e2e tests with pytest
-        run: PYTHONPATH=. CACHE_FROM_REGISTRY=${{ env.BUILDER_IMAGE_NAME }}:main pytest -v
 
       - name: Extract metadata for Docker client image
         id: client-meta
