@@ -15,7 +15,7 @@ docker pull ghcr.io/dlemel8/tunneler-client:main
 ```
 ### Option 2: compile from source code
 ```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+cargo --version || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo build --release
 ```
 There is also a [docker file](Dockerfile) if you prefer to build a local docker image

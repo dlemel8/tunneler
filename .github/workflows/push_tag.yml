@@ -1,0 +1,95 @@
+name: Build and Publish Docker image
+
+on:
+  push:
+    tags: [ v* ]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Log in to container registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set base image name
+        run: echo "BASE_IMAGE_NAME=${{ env.REGISTRY }}/${{ github.repository }}" >> $GITHUB_ENV
+
+      - name: Set builder image name
+        run: echo "BUILDER_IMAGE_NAME=${{ env.BASE_IMAGE_NAME }}-builder" >> $GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Install e2e tests dependencies
+        run: python3.9 -m pip install -r e2e_tests/requirements.txt
+
+      - name: Run e2e tests with pytest
+        run: PYTHONPATH=. CACHE_FROM_REGISTRY=${{ env.BUILDER_IMAGE_NAME }}:main pytest -v
+
+      - name: Extract metadata for Docker client image
+        id: client-meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.BASE_IMAGE_NAME }}-client
+
+      - name: Build and push Docker client image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          build-args: EXECUTABLE=client
+          push: true
+          tags: ${{ steps.client-meta.outputs.tags }}
+          labels: ${{ steps.client-meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.BUILDER_IMAGE_NAME }}:main
+          cache-to: type=inline
+
+      - name: Extract metadata for Docker server image
+        id: server-meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.BASE_IMAGE_NAME }}-server
+
+      - name: Build and push Docker server image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          build-args: EXECUTABLE=server
+          push: true
+          tags: ${{ steps.server-meta.outputs.tags }}
+          labels: ${{ steps.server-meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.BUILDER_IMAGE_NAME }}:main
+          cache-to: type=inline
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Publish Rust Crate
+        uses: katyo/publish-crates@v1
+        with:
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Create a Github Release
+        uses: softprops/action-gh-release@v1

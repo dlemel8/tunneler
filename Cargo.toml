@@ -3,6 +3,12 @@ name = "tunneler"
 version = "0.1.0"
 authors = ["Daniel Segal <dlemel8@gmail.com>"]
 edition = "2018"
+license-file = "LICENSE.md"
+description = "DNS tunneling and TCP proxy"
+repository = "https://github.com/dlemel8/tunneler"
+readme = "README.md"
+keywords = ["dns", "tcp", "tcp-proxy", "dns-tunneling"]
+categories = ["asynchronous", "network-programming", "command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
