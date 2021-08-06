@@ -1,4 +1,4 @@
-name: Build and Publish Docker image
+name: Build and Publish Tagged Docker images, Rust Crate and Github Release
 
 on:
   push:
@@ -93,3 +93,5 @@ jobs:
 
       - name: Create a Github Release
         uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
