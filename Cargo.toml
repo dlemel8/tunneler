@@ -1,9 +1,9 @@
 [package]
 name = "tunneler"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Daniel Segal <dlemel8@gmail.com>"]
 edition = "2018"
-license-file = "LICENSE.md"
+license = "MIT"
 description = "DNS tunneling and TCP proxy"
 repository = "https://github.com/dlemel8/tunneler"
 readme = "README.md"

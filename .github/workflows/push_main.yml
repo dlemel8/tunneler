@@ -1,4 +1,4 @@
-name: Build and publish Docker images and run E2e tests
+name: Build and publish Docker images and run end-to-end tests
 
 on:
   push:
@@ -8,7 +8,7 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-and-publish:
+  build-test-publish:
     runs-on: ubuntu-latest
 
     permissions:

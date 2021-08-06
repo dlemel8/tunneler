@@ -1,4 +1,4 @@
-name: Build and publish tagged Docker images, Rust Crate and Github Release
+name: Build and publish tagged Docker images and Rust Crate
 
 on:
   push:
@@ -8,7 +8,7 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-and-publish:
+  build-publish-tag:
     runs-on: ubuntu-latest
 
     permissions:
@@ -79,8 +79,3 @@ jobs:
         uses: katyo/publish-crates@v1
         with:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Create a Github Release
-        uses: softprops/action-gh-release@v1
-        with:
-          prerelease: true
