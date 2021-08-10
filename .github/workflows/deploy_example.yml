@@ -26,6 +26,7 @@ jobs:
         uses: dflook/terraform-plan@v1
         with:
           path: examples/${{ github.event.inputs.exampleName }}
+          workspace: tunneler
 
 
   apply-infra-deployment:
