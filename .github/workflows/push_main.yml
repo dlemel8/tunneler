@@ -99,9 +99,9 @@ jobs:
       - name: Terraform format check
         uses: dflook/terraform-fmt-check@v1
         with:
-          path: examples/spped_test
+          path: examples/speed_test
 
       - name: Terraform validation
         uses: dflook/terraform-validate@v1
         with:
-          path: examples/spped_test
+          path: examples/speed_test
