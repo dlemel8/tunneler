@@ -1,0 +1,43 @@
+name: Deploy an example server using Terraform
+
+on:
+  workflow_dispatch:
+    inputs:
+      exampleName:
+        description: 'Example Name'
+        required: true
+        default: 'speed_test'
+
+env:
+  TERRAFORM_CLOUD_TOKENS: app.terraform.io=${{ secrets.TERRAFORM_CLOUD_TOKEN }}
+  TF_VAR_LINODE_API_TOKEN: ${{ secrets.LINODE_API_TOKEN }}
+  TF_VAR_LINODE_PUBLIC_SSH_KEY: ${{ secrets.LINODE_PUBLIC_SSH_KEY }}
+  TF_VAR_LINODE_ROOT_PASSWORD: ${{ secrets.LINODE_ROOT_PASSWORD }}
+
+jobs:
+  plan-infra-deployment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Terraform plan
+        uses: dflook/terraform-plan@v1
+        with:
+          path: examples/${{ github.event.inputs.exampleName }}
+
+
+  apply-infra-deployment:
+    runs-on: ubuntu-latest
+    environment: Example
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: terraform apply
+        uses: dflook/terraform-apply@v1
+        with:
+          path: examples/${{ github.event.inputs.exampleName }}
+          auto_approve: true

@@ -1,11 +1,8 @@
-name: Build and publish Docker images and run end-to-end tests
+name: Build and publish Docker images, run end-to-end tests and verify examples
 
 on:
   push:
     branches: [ main ]
-
-env:
-  REGISTRY: ghcr.io
 
 jobs:
   build-test-publish:
@@ -14,6 +11,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+    env:
+      REGISTRY: ghcr.io
 
     steps:
       - name: Checkout repository
@@ -87,3 +87,21 @@ jobs:
           labels: ${{ steps.server-meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.BUILDER_IMAGE_NAME }}:main
           cache-to: type=inline
+
+  verify-examples:
+    runs-on: ubuntu-latest
+
+    # TODO - add matrix to run on each example
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Terraform format check
+        uses: dflook/terraform-fmt-check@v1
+        with:
+          path: examples/spped_test
+
+      - name: Terraform validation
+        uses: dflook/terraform-validate@v1
+        with:
+          path: examples/spped_test

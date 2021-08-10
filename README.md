@@ -38,7 +38,7 @@ LOG_LEVEL=debug \
 Run docker image or compiled binary with `--help` for more information
 
 ## Deployment Example
-This repo contains a [docker compose file](docker-compose.server.yml) with the following services:
+This repo contains a [docker compose file](examples/speed_test/docker-compose.server.yml) with the following services:
 * speed test, based on iperf3 server, exporting port tcp/45201 to host
 * speed test tcp proxy, based on tunneler server, exporting port tcp/45301 to host
 * speed test dns tunnel, based on tunneler server, exporting port udp/53 to host
