@@ -31,6 +31,7 @@ jobs:
   apply-infra-deployment:
     runs-on: ubuntu-latest
     environment: Example
+    needs: [plan-infra-deployment]
 
     steps:
       - name: Checkout repository
