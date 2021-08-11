@@ -34,7 +34,7 @@ jobs:
         run: |
           terraform init
           terraform plan -out=./tfplan
-          echo ::set-output name=tfplan::$(cat ./tfplan)
+          echo ::set-output name=tfplan::$(cat ./tfplan | base64)
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
   apply-infra-deployment:
@@ -55,6 +55,6 @@ jobs:
       - name: Terraform apply
         run: |
           terraform init
-          echo ${{needs.plan-infra-deployment.outputs.tfplan}} > ./tfplan
+          echo ${{needs.plan-infra-deployment.outputs.tfplan}} | base64 -d > ./tfplan
           terraform apply ./tfplan
         working-directory: examples/${{ github.event.inputs.exampleName }}
