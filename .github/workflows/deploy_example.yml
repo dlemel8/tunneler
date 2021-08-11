@@ -9,7 +9,6 @@ on:
         default: 'speed_test'
 
 env:
-  TERRAFORM_CLOUD_TOKENS: app.terraform.io=${{ secrets.TERRAFORM_CLOUD_TOKEN }}
   TF_VAR_LINODE_API_TOKEN: ${{ secrets.LINODE_API_TOKEN }}
   TF_VAR_LINODE_PUBLIC_SSH_KEY: ${{ secrets.LINODE_PUBLIC_SSH_KEY }}
   TF_VAR_LINODE_ROOT_PASSWORD: ${{ secrets.LINODE_ROOT_PASSWORD }}
@@ -22,17 +21,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Terraform plan
-        uses: dflook/terraform-plan@v1
+      - name: Set Up Terraform
+        uses: hashicorp/setup-terraform@v1
         with:
-          path: examples/${{ github.event.inputs.exampleName }}
-          workspace: tunneler
+          terraform_version: 1.0.4
+          cli_config_credentials_token: ${{ secrets.TERRAFORM_CLOUD_TOKEN }}
 
+      - name: Terraform init
+        run: terraform init
+        working-directory: examples/${{ github.event.inputs.exampleName }}
+
+      - name: Terraform plan
+        run: terraform plan
+        working-directory: examples/${{ github.event.inputs.exampleName }}
 
   apply-infra-deployment:
     runs-on: ubuntu-latest
     environment: Example
-    needs: [plan-infra-deployment]
+    needs: [ plan-infra-deployment ]
 
     steps:
       - name: Checkout repository
