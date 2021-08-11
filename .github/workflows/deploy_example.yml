@@ -44,8 +44,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: terraform apply
-        uses: dflook/terraform-apply@v1
+      - name: Set Up Terraform
+        uses: hashicorp/setup-terraform@v1
         with:
-          path: examples/${{ github.event.inputs.exampleName }}
-          auto_approve: true
+          terraform_version: 1.0.4
+          cli_config_credentials_token: ${{ secrets.TERRAFORM_CLOUD_TOKEN }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: examples/${{ github.event.inputs.exampleName }}
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+        working-directory: examples/${{ github.event.inputs.exampleName }}
