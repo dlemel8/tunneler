@@ -73,5 +73,6 @@ jobs:
       - name: Terraform apply
         run: |
           terraform init
+          terraform show /tmp/tfplan
           terraform apply /tmp/tfplan
         working-directory: examples/${{ github.event.inputs.exampleName }}
