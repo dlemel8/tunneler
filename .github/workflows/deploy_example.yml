@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/tfplan
-          key: tfplan
+          key: tfplan-${{ github.run_id }}
 
   apply-infra-deployment:
     runs-on: ubuntu-latest
@@ -53,7 +53,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/tfplan
-          key: tfplan
+          key: tfplan-${{ github.run_id }}
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
