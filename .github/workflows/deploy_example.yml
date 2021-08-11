@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: Example
     needs: [ terraform-plan ]
-    if: ${{ needs.terraform-plan.outputs.exitcode == 2 }}
+    if: ${{ needs.terraform-plan.outputs.plan-exitcode == 2 }}
 
     steps:
       - name: Checkout repository
