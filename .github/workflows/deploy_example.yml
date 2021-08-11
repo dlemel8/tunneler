@@ -16,6 +16,8 @@ env:
 jobs:
   plan-infra-deployment:
     runs-on: ubuntu-latest
+    outputs:
+      tfplan: ${{ steps.plan.outputs.tfplan }}
 
     steps:
       - name: Checkout repository
@@ -27,12 +29,12 @@ jobs:
           terraform_version: 1.0.4
           cli_config_credentials_token: ${{ secrets.TERRAFORM_CLOUD_TOKEN }}
 
-      - name: Terraform init
-        run: terraform init
-        working-directory: examples/${{ github.event.inputs.exampleName }}
-
       - name: Terraform plan
-        run: terraform plan
+        id: plan
+        run: |
+          terraform init
+          terraform plan -out=./tfplan
+          echo ::set-output name=tfplan::$(cat ./tfplan)
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
   apply-infra-deployment:
@@ -50,10 +52,9 @@ jobs:
           terraform_version: 1.0.4
           cli_config_credentials_token: ${{ secrets.TERRAFORM_CLOUD_TOKEN }}
 
-      - name: Terraform init
-        run: terraform init
-        working-directory: examples/${{ github.event.inputs.exampleName }}
-
       - name: Terraform apply
-        run: terraform apply -auto-approve
+        run: |
+          terraform init
+          echo ${{needs.plan-infra-deployment.outputs.tfplan}} > ./tfplan
+          terraform apply ./tfplan
         working-directory: examples/${{ github.event.inputs.exampleName }}
