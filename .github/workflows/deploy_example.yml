@@ -16,8 +16,6 @@ env:
 jobs:
   plan-infra-deployment:
     runs-on: ubuntu-latest
-    outputs:
-      tfplan: ${{ steps.plan.outputs.tfplan }}
 
     steps:
       - name: Checkout repository
@@ -33,9 +31,14 @@ jobs:
         id: plan
         run: |
           terraform init
-          terraform plan -out=./tfplan
-          echo ::set-output name=tfplan::$(cat ./tfplan | base64)
+          terraform plan -out=/tmp/tfplan
         working-directory: examples/${{ github.event.inputs.exampleName }}
+
+      - name: Cache plan
+        uses: actions/cache@v2
+        with:
+          path: /tmp/tfplan
+          key: tfplan
 
   apply-infra-deployment:
     runs-on: ubuntu-latest
@@ -46,6 +49,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: Get plan from cache
+        uses: actions/cache@v2
+        with:
+          path: /tmp/tfplan
+          key: tfplan
+
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
@@ -55,6 +64,5 @@ jobs:
       - name: Terraform apply
         run: |
           terraform init
-          echo ${{needs.plan-infra-deployment.outputs.tfplan}} | base64 -d > ./tfplan
-          terraform apply ./tfplan
+          terraform apply /tmp/tfplan
         working-directory: examples/${{ github.event.inputs.exampleName }}
