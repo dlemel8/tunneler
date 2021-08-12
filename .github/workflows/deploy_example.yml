@@ -97,7 +97,7 @@ jobs:
             ansible-inventory-
 
       - name: Load SSH key
-        run: 'echo "$SSH_KEY" > /tmp/id_rsa'
+        run: 'echo "$SSH_KEY" > /tmp/id_rsa && chmod 600 /tmp/id_rsa'
         shell: bash
         env:
           SSH_KEY: ${{secrets.SSH_KEY}}
