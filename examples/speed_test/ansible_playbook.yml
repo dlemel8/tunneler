@@ -1,0 +1,9 @@
+---
+- hosts: all
+  tasks:
+    - name: Harden SSH
+      import_role:
+        name: dev-sec.ssh-hardening
+      vars:
+        ssh_permit_root_login: 'yes'
+        ssh_max_auth_retries: 5

@@ -109,7 +109,19 @@ jobs:
         env:
           SSH_KEY: ${{secrets.SSH_KEY}}
 
-      - name: Ansible ping
-        run: ansible -i ansible_inventory --key-file /tmp/id_rsa all -m ping
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Set up Ansible
+        run: python3.9 -m pip install ansible==4.4.0
+
+      - name: Install Ansible dependencies
+        run: ansible-galaxy collection install -r ansible_requirements.yml
+        working-directory: examples/${{ github.event.inputs.exampleName }}
+
+      - name: Run Ansible playbook
+        run: ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
