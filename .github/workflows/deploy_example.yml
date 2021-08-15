@@ -114,22 +114,6 @@ jobs:
         env:
           SSH_KEY: ${{secrets.SSH_KEY}}
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
-
-      - name: Extract pip
-        uses: actions/cache@v2
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('examples/${{ github.event.inputs.exampleName }}/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Set up Ansible
-        run: python3.9 -m pip install -r examples/${{ github.event.inputs.exampleName }}/requirements.txt
-
       - name: Install Ansible playbook dependencies
         run: ansible-galaxy collection install -r ansible_requirements.yml
         working-directory: examples/${{ github.event.inputs.exampleName }}
