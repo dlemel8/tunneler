@@ -125,8 +125,6 @@ jobs:
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
       - name: Run Ansible playbook
-        run: |
-          ansible-playbook --version
-          ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml
+        run: ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
