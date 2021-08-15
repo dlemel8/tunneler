@@ -90,7 +90,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory-v2-${{ hashFiles('examples/${{ github.event.inputs.exampleName }}/ansible_inventory') }}
+          key: ansible-inventory-v2-${{ hashFiles(examples/${{ github.event.inputs.exampleName }}/ansible_inventory) }}
 
   configure-server:
     runs-on: ubuntu-latest
