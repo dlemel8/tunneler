@@ -120,6 +120,8 @@ jobs:
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
       - name: Run Ansible playbook
-        run: ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml
+        run: |
+          cat ansible_inventory || true
+          ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
