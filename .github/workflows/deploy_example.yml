@@ -95,6 +95,9 @@ jobs:
     if: always()
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
       - name: Get Ansible inventory from cache
         uses: actions/cache@v2
         with:
@@ -117,7 +120,7 @@ jobs:
       - name: Set up Ansible
         run: python3.9 -m pip install ansible==4.4.0
 
-      - name: Install Ansible dependencies
+      - name: Install Ansible playbook dependencies
         run: ansible-galaxy collection install -r ansible_requirements.yml
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
