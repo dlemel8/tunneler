@@ -40,6 +40,7 @@ jobs:
       - name: Terraform plan
         id: plan
         run: |
+          cat ansible_inventory
           terraform init
           terraform plan -detailed-exitcode -out=/tmp/tfplan
         working-directory: examples/${{ github.event.inputs.exampleName }}
