@@ -90,7 +90,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory-v2-${{ hashFiles('**/ansible_inventory') }}
+          key: ansible-inventory-v2--${{ hashFiles('**/ansible_inventory') }}
 
   configure-server:
     runs-on: ubuntu-latest
@@ -107,7 +107,7 @@ jobs:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
           key: ansible-inventory-v2--${{ github.run_id }}
           restore-keys: |
-            ansible-inventory-v2-
+            ansible-inventory-v2--
 
       - name: Load SSH key
         run: 'echo "$SSH_KEY" > /tmp/id_rsa && chmod 600 /tmp/id_rsa'
