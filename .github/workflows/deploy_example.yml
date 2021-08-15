@@ -27,7 +27,9 @@ jobs:
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory-
+          key: ansible-inventory-${{ github.run_id }}
+          restore-keys: |
+            ansible-inventory-
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
@@ -83,17 +85,11 @@ jobs:
           terraform apply /tmp/tfplan
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
-      - name: Cache Ansible inventory 1
+      - name: Cache Ansible inventory
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
           key: ansible-inventory-${{ github.run_id }}
-
-      - name: Cache Ansible inventory 2
-        uses: actions/cache@v2
-        with:
-          path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory-
 
   configure-server:
     runs-on: ubuntu-latest
