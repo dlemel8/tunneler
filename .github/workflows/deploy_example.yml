@@ -27,9 +27,9 @@ jobs:
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory-${{ github.run_id }}
+          key: ansible-inventory-v2-${{ github.run_id }}
           restore-keys: |
-            ansible-inventory
+            ansible-inventory-v2-
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
@@ -90,7 +90,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory-${{ hashFiles('examples/${{ github.event.inputs.exampleName }}/ansible_inventory') }}
+          key: ansible-inventory-v2-${{ hashFiles('examples/${{ github.event.inputs.exampleName }}/ansible_inventory') }}
 
   configure-server:
     runs-on: ubuntu-latest
@@ -105,9 +105,9 @@ jobs:
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory--${{ github.run_id }}
+          key: ansible-inventory-v2-${{ github.run_id }}
           restore-keys: |
-            ansible-inventory
+            ansible-inventory-v2-
 
       - name: Load SSH key
         run: 'echo "$SSH_KEY" > /tmp/id_rsa && chmod 600 /tmp/id_rsa'
