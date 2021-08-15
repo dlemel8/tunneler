@@ -27,7 +27,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
-          key: ansible-inventory-${{ github.run_id }}
+          key: ansible-inventory-
           restore-keys: |
             ansible-inventory-
 
