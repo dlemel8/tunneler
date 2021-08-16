@@ -106,13 +106,11 @@ jobs:
         with:
           path: examples/speed_test
 
-      - name: Install Ansible linter
-        run: python3 -m pip install ansible-lint[community,yamllint]==5.1.2
-
       - name: Install Ansible playbook dependencies
-        run: ansible-galaxy install -r ansible_requirements.yml
-        working-directory: examples/${{ github.event.inputs.exampleName }}
+        run: ansible-galaxy install -r examples/speed_test/ansible_requirements.yml
 
       - name: Ansible playbook validation
-        run: ansible-lint -p ansible_playbook.yml --exclude ~/.ansible/roles/
-        working-directory: examples/speed_test
+        uses: ansible/ansible-lint-action@v4.1.0
+        with:
+          targets: examples/speed_test/ansible_playbook.yml
+          args: "--exclude ~/.ansible/roles/"
