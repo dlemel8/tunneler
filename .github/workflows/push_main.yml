@@ -110,7 +110,7 @@ jobs:
         run: ansible-galaxy install -r examples/speed_test/ansible_requirements.yml
 
       - name: Ansible playbook validation
-        uses: ansible/ansible-lint-action@v4.1.0
+        uses: ansible/ansible-lint-action@master
         with:
           targets: examples/speed_test/ansible_playbook.yml
           args: "--exclude ~/.ansible/roles/"
