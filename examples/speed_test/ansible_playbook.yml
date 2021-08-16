@@ -9,3 +9,14 @@
       vars:
         ssh_permit_root_login: 'yes'
         ssh_max_auth_retries: 5
+
+    - name: Update repositories cache
+      apt:
+        update_cache: 'yes'
+
+    - name: Install Docker and Docker Compose
+      import_role:
+        name: nickjj.docker
+      vars:
+        docker__version: '20.10'
+        docker__compose_version: '1.29'

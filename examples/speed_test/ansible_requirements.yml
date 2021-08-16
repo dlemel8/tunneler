@@ -2,3 +2,7 @@
 collections:
   - name: devsec.hardening
     version: 7.9.0
+
+roles:
+  - name: nickjj.docker
+    version: v2.1.0

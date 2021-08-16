@@ -105,3 +105,10 @@ jobs:
         uses: dflook/terraform-validate@v1
         with:
           path: examples/speed_test
+
+      - name: Install Ansible linter
+        run: python3 -m pip install ansible-lint[community,yamllint]==5.1.2
+
+      - name: Ansible playbook validation
+        run: ansible-lint -p ansible_playbook.yml --exclude ~/.ansible/roles/
+        working-directory: examples/speed_test

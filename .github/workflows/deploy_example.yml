@@ -116,7 +116,7 @@ jobs:
           SSH_KEY: ${{secrets.SSH_KEY}}
 
       - name: Install Ansible playbook dependencies
-        run: ansible-galaxy collection install -r ansible_requirements.yml
+        run: ansible-galaxy install -r ansible_requirements.yml
         working-directory: examples/${{ github.event.inputs.exampleName }}
 
       - name: Run Ansible playbook
