@@ -20,3 +20,16 @@
       vars:
         docker__version: '20.10'
         docker__compose_version: '1.29'
+
+    - name: Copy Docker Compose file
+      ansible.builtin.copy:
+        src: docker-compose.server.yml
+        dest: /tmp/docker-compose.server.yml
+
+    - name: Create and start Docker services
+      community.docker.docker_compose:
+        project_src: /tmp/
+        files:
+          - docker-compose.server.yml
+      vars:
+        ansible_python_interpreter: /usr/local/lib/docker/virtualenv/bin/python3.8
