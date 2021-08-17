@@ -106,8 +106,19 @@ jobs:
         with:
           path: examples/speed_test
 
-      - name: Install Ansible linter
-        run: python3 -m pip install ansible-lint[community,yamllint]==5.1.2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - uses: actions/cache@v2
+        with:
+          path: ${{ env.pythonLocation }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('examples/speed_test/requirements.txt') }}
+
+      - name: Install Ansible dependencies
+        run: python3.9 -m pip install -r requirements.txt
+        working-directory: examples/speed_test
 
       - name: Install Ansible playbook dependencies
         run: ansible-galaxy install -r ansible_requirements.yml

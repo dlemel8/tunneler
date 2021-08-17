@@ -25,6 +25,7 @@
       ansible.builtin.copy:
         src: docker-compose.server.yml
         dest: /tmp/docker-compose.server.yml
+        mode: '0600'
 
     - name: Create and start Docker services
       community.docker.docker_compose:
