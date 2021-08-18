@@ -115,6 +115,20 @@ jobs:
         env:
           SSH_KEY: ${{secrets.SSH_KEY}}
 
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - uses: actions/cache@v2
+        with:
+          path: ${{ env.pythonLocation }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('examples/${{ github.event.inputs.exampleName }}/requirements.txt') }}
+
+      - name: Install Ansible dependencies
+        run: python3.9 -m pip install -r requirements.txt
+        working-directory: examples/${{ github.event.inputs.exampleName }}
+
       - name: Install Ansible playbook dependencies
         run: ansible-galaxy install -r ansible_requirements.yml
         working-directory: examples/${{ github.event.inputs.exampleName }}

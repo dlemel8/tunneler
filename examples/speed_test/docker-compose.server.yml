@@ -24,13 +24,13 @@ services:
   speed-test-dns-tunnel:
     image: ghcr.io/dlemel8/tunneler-server:${TAG:-main}
     environment:
-      LOCAL_PORT: 5353
+      LOCAL_PORT: 53535
       REMOTE_PORT: 5201
       REMOTE_ADDRESS: speed-test
       READ_TIMEOUT_IN_MILLISECONDS: 100
       IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS: 300000
     ports:
-      - "5353:5353/udp"
+      - "53535:53535/udp"
     command: "dns"
     depends_on:
       speed-test:
