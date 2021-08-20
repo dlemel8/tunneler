@@ -91,7 +91,6 @@ jobs:
   verify-examples:
     runs-on: ubuntu-latest
 
-    # TODO - add matrix to run on each example
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -99,12 +98,12 @@ jobs:
       - name: Terraform format check
         uses: dflook/terraform-fmt-check@v1
         with:
-          path: examples/speed_test
+          path: examples
 
       - name: Terraform validation
         uses: dflook/terraform-validate@v1
         with:
-          path: examples/speed_test
+          path: examples
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -114,16 +113,16 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('examples/speed_test/requirements.txt') }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('examples/requirements.txt') }}
 
       - name: Install Ansible dependencies
         run: python3.9 -m pip install -r requirements.txt
-        working-directory: examples/speed_test
+        working-directory: examples
 
       - name: Install Ansible playbook dependencies
         run: ansible-galaxy install -r ansible_requirements.yml
-        working-directory: examples/speed_test
+        working-directory: examples
 
       - name: Ansible playbook validation
         run: ansible-lint -p ansible_playbook.yml --exclude ~/.ansible/roles/
-        working-directory: examples/speed_test
+        working-directory: examples

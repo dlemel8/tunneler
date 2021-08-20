@@ -12,6 +12,7 @@ env:
   TF_VAR_LINODE_API_TOKEN: ${{ secrets.LINODE_API_TOKEN }}
   TF_VAR_LINODE_PUBLIC_SSH_KEY: ${{ secrets.LINODE_PUBLIC_SSH_KEY }}
   TF_VAR_LINODE_ROOT_PASSWORD: ${{ secrets.LINODE_ROOT_PASSWORD }}
+  TF_VAR_SELECTED_EXAMPLE: ${{ github.event.inputs.exampleName }}
 
 jobs:
   plan-server-infra:
@@ -26,7 +27,7 @@ jobs:
       - name: Get Ansible inventory from cache
         uses: actions/cache@v2
         with:
-          path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
+          path: examples/ansible_inventory
           key: ansible-inventory-${{ github.run_id }}
           restore-keys: |
             ansible-inventory-v2--
@@ -43,7 +44,7 @@ jobs:
           cat ansible_inventory || true
           terraform init
           terraform plan -detailed-exitcode -out=/tmp/tfplan
-        working-directory: examples/${{ github.event.inputs.exampleName }}
+        working-directory: examples
         continue-on-error: true
 
       - name: Verify Terraform plan
@@ -84,12 +85,12 @@ jobs:
           terraform init
           terraform show /tmp/tfplan
           terraform apply /tmp/tfplan
-        working-directory: examples/${{ github.event.inputs.exampleName }}
+        working-directory: examples
 
       - name: Cache Ansible inventory
         uses: actions/cache@v2
         with:
-          path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
+          path: examples/ansible_inventory
           key: ansible-inventory-v2--${{ hashFiles('**/ansible_inventory') }}
 
   configure-server:
@@ -104,7 +105,7 @@ jobs:
       - name: Get Ansible inventory from cache
         uses: actions/cache@v2
         with:
-          path: examples/${{ github.event.inputs.exampleName }}/ansible_inventory
+          path: examples/ansible_inventory
           key: ansible-inventory-v2--${{ github.run_id }}
           restore-keys: |
             ansible-inventory-v2--
@@ -123,19 +124,19 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('examples/${{ github.event.inputs.exampleName }}/requirements.txt') }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('examples/requirements.txt') }}
 
       - name: Install Ansible dependencies
         run: python3.9 -m pip install -r requirements.txt
-        working-directory: examples/${{ github.event.inputs.exampleName }}
+        working-directory: examples
 
       - name: Install Ansible playbook dependencies
         run: ansible-galaxy install -r ansible_requirements.yml
-        working-directory: examples/${{ github.event.inputs.exampleName }}
+        working-directory: examples
 
       - name: Run Ansible playbook
         run: |
           cat ansible_inventory || true
-          ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml
-        working-directory: examples/${{ github.event.inputs.exampleName }}
+          ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml --extra-vars "example_name=${{ github.event.inputs.exampleName }}"
+        working-directory: examples
 

@@ -3,6 +3,15 @@
   collections:
     - devsec.hardening
   tasks:
+    - name: Find local example file
+      local_action: ansible.builtin.stat path='{{ example_name }}/docker-compose.server.yml'
+      register: local_example_exists
+
+    - name: Fail if local example file does not exists
+      ansible.builtin.fail:
+        msg: 'please provide existing example name'
+      when: local_example_exists.stat.exists == false
+
     - name: Harden SSH
       import_role:
         name: ssh_hardening
@@ -23,7 +32,7 @@
 
     - name: Copy Docker Compose file
       ansible.builtin.copy:
-        src: docker-compose.server.yml
+        src: '{{ example_name }}/docker-compose.server.yml'
         dest: /tmp/docker-compose.server.yml
         mode: '0600'
 
