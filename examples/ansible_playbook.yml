@@ -4,13 +4,15 @@
     - devsec.hardening
   tasks:
     - name: Find local example file
-      local_action: ansible.builtin.stat path='{{ example_name }}/docker-compose.server.yml'
+      ansible.builtin.stat:
+        path='{{ example_name }}/docker-compose.server.yml'
+      delegate_to: localhost
       register: local_example_exists
 
     - name: Fail if local example file does not exists
       ansible.builtin.fail:
         msg: 'please provide existing example name'
-      when: local_example_exists.stat.exists == false
+      when: not local_example_exists.stat.exists
 
     - name: Harden SSH
       import_role:
