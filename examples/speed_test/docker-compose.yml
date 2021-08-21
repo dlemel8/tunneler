@@ -2,8 +2,8 @@ version: "2.4"
 services:
   speed-test:
     image: networkstatic/iperf3
-    ports:
-      - "45201:5201"
+    expose:
+      - 5201
     command: "-s"
     healthcheck:
       test: iperf3 -c 127.0.0.1 -l1 -t1

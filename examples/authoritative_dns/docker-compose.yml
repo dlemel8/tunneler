@@ -1,0 +1,21 @@
+version: "2.4"
+services:
+  redis:
+    image: redis:6.0.12-alpine
+    expose:
+      - 6379
+    healthcheck:
+      test: redis-cli ping
+
+  redis-dns-tunnel:
+    image: ghcr.io/dlemel8/tunneler-server:${TAG:-main}
+    environment:
+      LOCAL_PORT: 53
+      REMOTE_PORT: 6379
+      REMOTE_ADDRESS: redis
+      READ_TIMEOUT_IN_MILLISECONDS: 100
+      IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS: 300000
+    command: "dns"
+    depends_on:
+      redis:
+        condition: service_healthy

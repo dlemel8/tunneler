@@ -1,0 +1,8 @@
+version: "2.4"
+services:
+  redis:
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+
+  redis-dns-tunnel:
+    ports:
+      - "${PUBLIC_IP}:53:53/udp"

@@ -2,17 +2,25 @@
 - hosts: all
   collections:
     - devsec.hardening
-  tasks:
-    - name: Find local example file
-      ansible.builtin.stat:
-        path='{{ example_name }}/docker-compose.server.yml'
-      delegate_to: localhost
-      register: local_example_exists
 
-    - name: Fail if local example file does not exists
+  vars:
+    compose_files:
+      - docker-compose.yml
+      - docker-compose.prod.yml
+
+  tasks:
+    - name: Find local compose files
+      ansible.builtin.stat:
+        path: "{{ example_name }}/{{ item }}"
+      delegate_to: localhost
+      with_items: "{{ compose_files }}"
+      register: compose_file_exists
+
+    - name: Fail if local compose files does not exists
       ansible.builtin.fail:
-        msg: 'please provide existing example name'
-      when: not local_example_exists.stat.exists
+        msg: 'missing {{ item.item }}'
+      when: not item.stat.exists
+      with_items: "{{ compose_file_exists.results }}"
 
     - name: Harden SSH
       import_role:
@@ -34,14 +42,14 @@
 
     - name: Copy Docker Compose file
       ansible.builtin.copy:
-        src: '{{ example_name }}/docker-compose.server.yml'
-        dest: /tmp/docker-compose.server.yml
+        src: "{{ example_name }}/{{ item }}"
+        dest: /tmp/
         mode: '0600'
+      with_items: "{{ compose_files }}"
 
     - name: Create and start Docker services
       community.docker.docker_compose:
         project_src: /tmp/
-        files:
-          - docker-compose.server.yml
+        files: "{{ compose_files }}"
       vars:
         ansible_python_interpreter: /usr/local/lib/docker/virtualenv/bin/python3.8
