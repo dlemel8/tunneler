@@ -32,6 +32,15 @@ jobs:
           restore-keys: |
             ansible-inventory-v2--
 
+      - name: Get Authoritative DNS Docker compose from cache
+        if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
+        uses: actions/cache@v2
+        with:
+          path: examples/authoritative_dns/docker-compose.prod.yml
+          key: authoritative-dns-docker-compose-${{ github.run_id }}
+          restore-keys: |
+            authoritative-dns-docker-compose--
+
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
@@ -93,6 +102,13 @@ jobs:
           path: examples/ansible_inventory
           key: ansible-inventory-v2--${{ hashFiles('**/ansible_inventory') }}
 
+      - name: Cache Authoritative DNS Docker compose
+        if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
+        uses: actions/cache@v2
+        with:
+          path: examples/authoritative_dns/docker-compose.prod.yml
+          key: authoritative-dns-docker-compose--${{ hashFiles('examples/authoritative_dns/docker-compose.prod.yml') }}
+
   configure-server:
     runs-on: ubuntu-latest
     needs: [ apply-server-infra ]
@@ -109,6 +125,15 @@ jobs:
           key: ansible-inventory-v2--${{ github.run_id }}
           restore-keys: |
             ansible-inventory-v2--
+
+      - name: Get Authoritative DNS Docker compose from cache
+        if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
+        uses: actions/cache@v2
+        with:
+          path: examples/authoritative_dns/docker-compose.prod.yml
+          key: authoritative-dns-docker-compose--${{ github.run_id }}
+          restore-keys: |
+            authoritative-dns-docker-compose--
 
       - name: Load SSH key
         run: 'echo "$SSH_KEY" > /tmp/id_rsa && chmod 600 /tmp/id_rsa'
