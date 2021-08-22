@@ -13,6 +13,7 @@ env:
   TF_VAR_LINODE_PUBLIC_SSH_KEY: ${{ secrets.LINODE_PUBLIC_SSH_KEY }}
   TF_VAR_LINODE_ROOT_PASSWORD: ${{ secrets.LINODE_ROOT_PASSWORD }}
   TF_VAR_SELECTED_EXAMPLE: ${{ github.event.inputs.exampleName }}
+  TF_VAR_REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
 
 jobs:
   plan-server-infra:
@@ -146,7 +147,8 @@ jobs:
         with:
           python-version: 3.9
 
-      - uses: actions/cache@v2
+      - name: Get Python dependencies from cache
+        uses: actions/cache@v2
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('examples/requirements.txt') }}

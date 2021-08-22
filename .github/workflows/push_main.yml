@@ -110,7 +110,8 @@ jobs:
         with:
           python-version: 3.9
 
-      - uses: actions/cache@v2
+      - name: Get Python dependencies from cache
+        uses: actions/cache@v2
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('examples/requirements.txt') }}
