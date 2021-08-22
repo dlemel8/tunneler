@@ -9,7 +9,7 @@ variable "REDIS_PASSWORD" {
 resource "local_file" "docker_compose_prod" {
   content = templatefile("${path.module}/docker-compose.prod.yml.tmpl", {
     REDIS_PASSWORD = var.REDIS_PASSWORD
-    PUBLIC_IP = var.PUBLIC_IP
+    PUBLIC_IP      = var.PUBLIC_IP
   })
   filename = "${path.module}/docker-compose.prod.yml"
 }
