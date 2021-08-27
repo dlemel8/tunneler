@@ -11,6 +11,7 @@ use common::io::{Stream, TcpServer};
 
 use crate::dns::DnsTunneler;
 use crate::tunnel::{TcpTunneler, Tunneler};
+use std::sync::Arc;
 
 mod dns;
 mod tunnel;
@@ -33,10 +34,11 @@ async fn start_client(args: Cli) -> Result<(), Box<dyn Error>> {
     let mut server = TcpServer::new(args.local_address, args.local_port).await?;
     let (clients_sender, clients_receiver) = async_channel::unbounded::<Stream>();
 
+    let tunnel_type = Arc::new(args.tunnel_type);
     let accept_clients_future = server.accept_clients(clients_sender);
     let tunnel_clients_future = tunnel_clients(
         clients_receiver,
-        args.tunnel_type,
+        tunnel_type.clone(),
         args.remote_address,
         args.remote_port,
     );
@@ -47,7 +49,7 @@ async fn start_client(args: Cli) -> Result<(), Box<dyn Error>> {
 }
 
 async fn new_tunneler(
-    tunnel_type: TunnelType,
+    tunnel_type: &TunnelType,
     address: IpAddr,
     port: u16,
 ) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
@@ -56,12 +58,14 @@ async fn new_tunneler(
         TunnelType::Dns {
             read_timeout_in_milliseconds,
             idle_client_timeout_in_milliseconds,
+            client_suffix,
         } => Ok(Box::new(
             DnsTunneler::new(
                 address,
                 port,
-                Duration::from_millis(read_timeout_in_milliseconds),
-                Duration::from_millis(idle_client_timeout_in_milliseconds),
+                Duration::from_millis(*read_timeout_in_milliseconds),
+                Duration::from_millis(*idle_client_timeout_in_milliseconds),
+                client_suffix.clone(),
             )
             .await?,
         )),
@@ -70,14 +74,14 @@ async fn new_tunneler(
 
 async fn tunnel_clients(
     clients: Receiver<Stream>,
-    tunnel_type: TunnelType,
+    tunnel_type: Arc<TunnelType>,
     remote_address: IpAddr,
     remote_port: u16,
 ) -> Result<(), Box<dyn Error>> {
     while let Ok(client) = clients.recv().await {
         tokio::spawn(tunnel_client(
             client,
-            tunnel_type,
+            tunnel_type.clone(),
             remote_address,
             remote_port,
         ));
@@ -87,11 +91,11 @@ async fn tunnel_clients(
 
 async fn tunnel_client(
     client: Stream,
-    tunnel_type: TunnelType,
+    tunnel_type: Arc<TunnelType>,
     remote_address: IpAddr,
     remote_port: u16,
 ) {
-    let mut tunnel = match new_tunneler(tunnel_type, remote_address, remote_port).await {
+    let mut tunnel = match new_tunneler(&tunnel_type, remote_address, remote_port).await {
         Ok(t) => t,
         Err(e) => {
             log::error!(

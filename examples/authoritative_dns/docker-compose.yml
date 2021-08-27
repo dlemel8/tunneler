@@ -15,6 +15,7 @@ services:
       REMOTE_ADDRESS: redis
       READ_TIMEOUT_IN_MILLISECONDS: 100
       IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS: 300000
+      CLIENT_SUFFIX: .dlemel8.xyz
     command: "dns"
     depends_on:
       redis:

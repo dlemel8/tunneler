@@ -23,7 +23,7 @@ use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
 use trust_dns_server::ServerFuture;
 
 use common::dns::{
-    ClientId, ClientIdSuffixDecoder, Decoder, Encoder, HexDecoder, HexEncoder,
+    AppendSuffixDecoder, ClientId, ClientIdSuffixDecoder, Decoder, Encoder, HexDecoder, HexEncoder,
     CLIENT_ID_SIZE_IN_BYTES,
 };
 use common::io::Stream;
@@ -35,6 +35,7 @@ pub(crate) struct DnsUntunneler {
     listener_address: SocketAddr,
     read_timeout: Duration,
     idle_client_timeout: Duration,
+    client_suffix: String,
 }
 
 impl DnsUntunneler {
@@ -43,12 +44,14 @@ impl DnsUntunneler {
         local_port: u16,
         read_timeout: Duration,
         idle_client_timeout: Duration,
+        client_suffix: String,
     ) -> Result<Self, Box<dyn Error>> {
         let listener_address = SocketAddr::new(local_address, local_port);
         Ok(Self {
             listener_address,
             read_timeout,
             idle_client_timeout,
+            client_suffix,
         })
     }
 }
@@ -71,7 +74,11 @@ impl Untunneler for DnsUntunneler {
         );
 
         let udp_socket = UdpSocket::bind(self.listener_address).await?;
-        let mut server = ServerFuture::new(UntunnelRequestHandler::new(cache, self.read_timeout));
+        let mut server = ServerFuture::new(UntunnelRequestHandler::new(
+            cache,
+            self.read_timeout,
+            self.client_suffix.clone(),
+        ));
         server.register_socket(udp_socket);
         match server.block_until_done().await {
             Ok(_) => Ok(()),
@@ -101,13 +108,19 @@ const MAXIMUM_TXT_RECORD_SIZE: usize = 54;
 pub struct UntunnelRequestHandler<F: StreamCreator> {
     untunneled_clients: Arc<StreamsCache<F, ClientId>>,
     read_timeout: Duration,
+    client_suffix: String,
 }
 
 impl<F: StreamCreator> UntunnelRequestHandler<F> {
-    pub(crate) fn new(cache: StreamsCache<F, ClientId>, read_timeout: Duration) -> Self {
+    pub(crate) fn new(
+        cache: StreamsCache<F, ClientId>,
+        read_timeout: Duration,
+        client_suffix: String,
+    ) -> Self {
         Self {
             untunneled_clients: Arc::new(cache),
             read_timeout,
+            client_suffix,
         }
     }
 }
@@ -120,13 +133,15 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
         request: Request,
         response_handle: R,
     ) -> Self::ResponseFuture {
+        let mut client_suffix = self.client_suffix.clone();
+        client_suffix.push('.');
         Box::pin(untunnel_request(
             request,
             ResponseHandlerWrapper {
                 handler: response_handle,
             },
             self.untunneled_clients.clone(),
-            ClientIdSuffixDecoder::new(HexDecoder {}),
+            AppendSuffixDecoder::new(ClientIdSuffixDecoder::new(HexDecoder {}), client_suffix),
             HexEncoder {},
             self.read_timeout,
         ))
@@ -199,11 +214,7 @@ fn get_data_from_tunnel(message: &MessageRequest) -> Option<String> {
     };
 
     let data_from_tunnel = match first_query.query_type() {
-        RecordType::TXT => first_query
-            .name()
-            .to_string()
-            .trim_end_matches('.')
-            .to_string(),
+        RecordType::TXT => first_query.name().to_string(),
         x => {
             log::error!("{}: unexpected type of query {}", message.id(), x);
             return None;

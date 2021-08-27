@@ -52,7 +52,7 @@ pub struct ClientIdSuffixEncoder<E: Encoder> {
 
 impl<E: Encoder> ClientIdSuffixEncoder<E> {
     pub fn new(encoder: E) -> Self {
-        ClientIdSuffixEncoder { encoder }
+        Self { encoder }
     }
 }
 
@@ -80,7 +80,7 @@ pub struct ClientIdSuffixDecoder<D: Decoder> {
 
 impl<D: Decoder> ClientIdSuffixDecoder<D> {
     pub fn new(decoder: D) -> Self {
-        ClientIdSuffixDecoder { decoder }
+        Self { decoder }
     }
 }
 
@@ -95,6 +95,49 @@ impl<D: Decoder> Decoder for ClientIdSuffixDecoder<D> {
         let decoded_client_id = client_id.as_bytes();
         res.extend_from_slice(decoded_client_id);
         Ok(res)
+    }
+}
+
+pub struct AppendSuffixEncoder<E: Encoder> {
+    encoder: E,
+    suffix: String,
+}
+
+impl<E: Encoder> AppendSuffixEncoder<E> {
+    pub fn new(encoder: E, suffix: String) -> Self {
+        Self { encoder, suffix }
+    }
+}
+
+impl<E: Encoder> Encoder for AppendSuffixEncoder<E> {
+    fn calculate_max_decoded_size(&self, max_encoded_size: usize) -> usize {
+        self.encoder.calculate_max_decoded_size(max_encoded_size) - self.suffix.len()
+    }
+
+    fn encode(&self, data: &[u8]) -> Result<String, Box<dyn Error>> {
+        let mut res = self.encoder.encode(data)?;
+        res.push_str(self.suffix.as_str());
+        Ok(res)
+    }
+}
+
+pub struct AppendSuffixDecoder<D: Decoder> {
+    decoder: D,
+    suffix: String,
+}
+
+impl<D: Decoder> AppendSuffixDecoder<D> {
+    pub fn new(decoder: D, suffix: String) -> Self {
+        Self { decoder, suffix }
+    }
+}
+
+impl<D: Decoder> Decoder for AppendSuffixDecoder<D> {
+    fn decode(&self, data: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+        let data_without_suffix = data
+            .strip_suffix(self.suffix.as_str())
+            .ok_or_else(|| String::from("missing suffix"))?;
+        self.decoder.decode(data_without_suffix)
     }
 }
 
@@ -183,6 +226,68 @@ mod tests {
         let decoder = ClientIdSuffixDecoder::new(decoder_mock);
         let res = decoder.decode("bla1234")?;
         assert_eq!(b"decoded1234", res.as_slice());
+        Ok(())
+    }
+
+    #[test]
+    fn append_suffix_encoder_internal_encoder_failed() -> Result<(), Box<dyn Error>> {
+        let suffix = String::from("xyz");
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Err(String::from("bla").into()));
+        let encoder = AppendSuffixEncoder::new(encoder_mock, suffix);
+        let res = encoder.encode(b"bla");
+        assert!(res.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn append_suffix_encoder_success() -> Result<(), Box<dyn Error>> {
+        let suffix = String::from("xyz");
+        let mut encoder_mock = MockEncoder::new();
+        encoder_mock
+            .expect_encode()
+            .returning(|_| Ok(String::from("encoded")));
+        let encoder = AppendSuffixEncoder::new(encoder_mock, suffix);
+        let res = encoder.encode(b"bla")?;
+        assert_eq!("encodedxyz", res);
+        Ok(())
+    }
+
+    #[test]
+    fn append_suffix_decoder_missing_suffix() -> Result<(), Box<dyn Error>> {
+        let suffix = String::from("xyz");
+        let decoder_mock = MockDecoder::new();
+        let decoder = AppendSuffixDecoder::new(decoder_mock, suffix);
+        let res = decoder.decode("123");
+        assert!(res.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn append_suffix_decoder_internal_decoder_failed() -> Result<(), Box<dyn Error>> {
+        let suffix = String::from("xyz");
+        let mut decoder_mock = MockDecoder::new();
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Err(String::from("bla").into()));
+        let decoder = AppendSuffixDecoder::new(decoder_mock, suffix);
+        let res = decoder.decode("blaxyz");
+        assert!(res.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn append_suffix_decoder_success() -> Result<(), Box<dyn Error>> {
+        let suffix = String::from("xyz");
+        let mut decoder_mock = MockDecoder::new();
+        decoder_mock
+            .expect_decode()
+            .returning(|_| Ok(String::from("decoded").into_bytes()));
+        let decoder = AppendSuffixDecoder::new(decoder_mock, suffix);
+        let res = decoder.decode("blaxyz")?;
+        assert_eq!(b"decoded", res.as_slice());
         Ok(())
     }
 }

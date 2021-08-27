@@ -14,7 +14,8 @@ use trust_dns_client::rr::{DNSClass, RData, RecordType};
 use trust_dns_client::udp::UdpClientStream;
 
 use common::dns::{
-    new_client_id, ClientId, ClientIdSuffixEncoder, Decoder, Encoder, HexDecoder, HexEncoder,
+    new_client_id, AppendSuffixEncoder, ClientId, ClientIdSuffixEncoder, Decoder, Encoder,
+    HexDecoder, HexEncoder,
 };
 use common::io::{AsyncReader, Stream};
 
@@ -68,13 +69,17 @@ impl DnsTunneler {
         port: u16,
         read_timeout: Duration,
         idle_timeout: Duration,
+        suffix: String,
     ) -> Result<Self, Box<dyn Error>> {
         let socket = SocketAddr::new(address, port);
         let stream = UdpClientStream::<UdpSocket>::new(socket);
         let (client, background) = AsyncClient::connect(stream).await?;
         tokio::spawn(background);
         Ok(DnsTunneler {
-            encoder: Box::new(ClientIdSuffixEncoder::new(HexEncoder {})),
+            encoder: Box::new(AppendSuffixEncoder::new(
+                ClientIdSuffixEncoder::new(HexEncoder {}),
+                suffix,
+            )),
             client_id: new_client_id(),
             client: Box::new(AsyncClientWrapper { client }),
             decoder: Box::new(HexDecoder {}),

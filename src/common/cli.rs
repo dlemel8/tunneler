@@ -5,7 +5,7 @@ use std::str::FromStr;
 use structopt::StructOpt;
 use trust_dns_resolver::Resolver;
 
-#[derive(StructOpt, Debug, Copy, Clone)]
+#[derive(StructOpt, Debug)]
 pub enum TunnelType {
     Tcp,
     Dns {
@@ -13,6 +13,8 @@ pub enum TunnelType {
         read_timeout_in_milliseconds: u64,
         #[structopt(env)]
         idle_client_timeout_in_milliseconds: u64,
+        #[structopt(default_value = "", env)]
+        client_suffix: String,
     },
 }
 

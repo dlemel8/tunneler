@@ -7,6 +7,8 @@ from typing import Union, Dict, Any, Optional
 import pytest
 from python_on_whales import docker, Image, Container
 
+DNS_SUFFIX = '.dlemel8.xyz'
+
 
 class TestPorts(Enum):
     BACKEND_PORT = 8080
@@ -121,7 +123,8 @@ def dns_server_container(server_image: Image) -> Container:
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
-                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300000})
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300000,
+                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
     yield container
     print(f'server {container.logs()=}')
     container.kill()
@@ -156,7 +159,8 @@ def dns_client_container(client_image: Image) -> Container:
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
-                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000})
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000,
+                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
     yield container
     print(f'client {container.logs()=}')
     container.kill()

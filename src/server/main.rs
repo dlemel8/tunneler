@@ -54,12 +54,14 @@ async fn new_untunneler(
         TunnelType::Dns {
             read_timeout_in_milliseconds,
             idle_client_timeout_in_milliseconds,
+            client_suffix,
         } => Ok(Box::new(
             DnsUntunneler::new(
                 address,
                 port,
                 Duration::from_millis(read_timeout_in_milliseconds),
                 Duration::from_millis(idle_client_timeout_in_milliseconds),
+                client_suffix,
             )
             .await?,
         )),
