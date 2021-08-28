@@ -305,6 +305,7 @@ fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> Messa
     response_header.set_op_code(OpCode::Query);
     response_header.set_message_type(MessageType::Response);
     response_header.set_authoritative(true);
+    response_header.set_authentic_data(true);
 
     builder.build(
         response_header,
