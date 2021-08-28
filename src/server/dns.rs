@@ -15,7 +15,9 @@ use tokio::io::{duplex, split};
 use tokio::net::UdpSocket;
 use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
-use trust_dns_client::op::{Header, MessageType, OpCode};
+use trust_dns_client::op::{Edns, Header, MessageType, OpCode};
+use trust_dns_client::proto::rr::dnssec::SupportedAlgorithms;
+use trust_dns_client::proto::rr::rdata::opt::EdnsOption;
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
 use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageResponseBuilder};
@@ -281,7 +283,22 @@ async fn untunnel_data<F: StreamCreator>(
 }
 
 fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> MessageResponse<'a, 'a> {
-    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
+    let mut builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
+
+    if message.edns().is_some() {
+        let algorithms = SupportedAlgorithms::new();
+        let dau = EdnsOption::DAU(algorithms);
+        let dhu = EdnsOption::DHU(algorithms);
+
+        let mut edns = Edns::new();
+        edns.set_dnssec_ok(false);
+        edns.set_version(0);
+        edns.options_mut().insert(dau);
+        edns.options_mut().insert(dhu);
+
+        builder.edns(edns);
+    }
+
     let mut response_header = Header::new();
     response_header.set_id(message.id());
     response_header.set_op_code(OpCode::Query);

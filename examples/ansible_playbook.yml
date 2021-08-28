@@ -51,5 +51,6 @@
       community.docker.docker_compose:
         project_src: /tmp/
         files: "{{ compose_files }}"
+        pull: 'yes'
       vars:
         ansible_python_interpreter: /usr/local/lib/docker/virtualenv/bin/python3.8
