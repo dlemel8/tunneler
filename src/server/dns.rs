@@ -285,14 +285,15 @@ async fn untunnel_data<F: StreamCreator>(
 fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> MessageResponse<'a, 'a> {
     let mut builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
 
-    if message.edns().is_some() {
-        let algorithms = SupportedAlgorithms::new();
+    if let Some(message_edns) = message.edns() {
+        let algorithms = SupportedAlgorithms::all();
         let dau = EdnsOption::DAU(algorithms);
         let dhu = EdnsOption::DHU(algorithms);
 
         let mut edns = Edns::new();
-        edns.set_dnssec_ok(false);
-        edns.set_version(0);
+        edns.set_dnssec_ok(message_edns.dnssec_ok());
+        edns.set_max_payload(message_edns.max_payload());
+        edns.set_version(message_edns.version());
         edns.options_mut().insert(dau);
         edns.options_mut().insert(dhu);
 
