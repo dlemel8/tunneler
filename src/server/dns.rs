@@ -16,7 +16,6 @@ use tokio::net::UdpSocket;
 use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
 use trust_dns_client::op::{Edns, Header, MessageType, OpCode};
-use trust_dns_client::proto::rr::dnssec::SupportedAlgorithms;
 use trust_dns_client::proto::rr::rdata::opt::EdnsOption;
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
@@ -286,12 +285,8 @@ fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> Messa
     let mut builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
 
     if let Some(message_edns) = message.edns() {
-        let algorithms = SupportedAlgorithms::all();
-        let dau = EdnsOption::DAU(algorithms);
-        let dhu = EdnsOption::DHU(algorithms);
-
         let mut edns = Edns::new();
-        edns.set_dnssec_ok(message_edns.dnssec_ok());
+        edns.set_dnssec_ok(false);
         edns.set_max_payload(message_edns.max_payload());
         edns.set_version(message_edns.version());
         edns.options_mut().insert(dau);
