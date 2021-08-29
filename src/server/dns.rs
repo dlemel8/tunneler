@@ -289,8 +289,6 @@ fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> Messa
         edns.set_dnssec_ok(false);
         edns.set_max_payload(message_edns.max_payload());
         edns.set_version(message_edns.version());
-        edns.options_mut().insert(dau);
-        edns.options_mut().insert(dhu);
 
         builder.edns(edns);
     }
