@@ -16,7 +16,6 @@ use tokio::net::UdpSocket;
 use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
 use trust_dns_client::op::{Edns, Header, MessageType, OpCode};
-use trust_dns_client::proto::rr::rdata::opt::EdnsOption;
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
 use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageResponseBuilder};
