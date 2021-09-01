@@ -15,9 +15,11 @@ use tokio::io::{duplex, split};
 use tokio::net::UdpSocket;
 use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
-use trust_dns_client::op::{Edns, Header, MessageType, OpCode};
+use trust_dns_client::op::{Edns, Header, MessageType, OpCode, Query};
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
+use trust_dns_resolver::lookup::Lookup;
+use trust_dns_resolver::Hosts;
 use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageResponseBuilder};
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
 use trust_dns_server::ServerFuture;
@@ -109,6 +111,7 @@ pub struct UntunnelRequestHandler<F: StreamCreator> {
     untunneled_clients: Arc<StreamsCache<F, ClientId>>,
     read_timeout: Duration,
     client_suffix: String,
+    hosts: Arc<Hosts>,
 }
 
 impl<F: StreamCreator> UntunnelRequestHandler<F> {
@@ -121,6 +124,7 @@ impl<F: StreamCreator> UntunnelRequestHandler<F> {
             untunneled_clients: Arc::new(cache),
             read_timeout,
             client_suffix,
+            hosts: Arc::new(Hosts::new()),
         }
     }
 }
@@ -134,7 +138,7 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
         response_handle: R,
     ) -> Self::ResponseFuture {
         let mut client_suffix = self.client_suffix.clone();
-        client_suffix.push('.');
+        client_suffix.push('.'); // add fqdn root
         Box::pin(untunnel_request(
             request,
             ResponseHandlerWrapper {
@@ -144,8 +148,15 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
             AppendSuffixDecoder::new(ClientIdSuffixDecoder::new(HexDecoder {}), client_suffix),
             HexEncoder {},
             self.read_timeout,
+            self.hosts.clone(),
         ))
     }
+}
+
+enum DataFromTunnel {
+    EncodedMessage(String),
+    HostsQueryLookup(Lookup),
+    None,
 }
 
 async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E: Encoder>(
@@ -155,11 +166,25 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     decoder: D,
     encoder: E,
     read_timeout: Duration,
+    hosts: Arc<Hosts>,
 ) {
     let message = &request.message;
-    let encoded_data_from_tunnel = match get_data_from_tunnel(message) {
-        Some(x) => x,
-        None => return,
+    let encoded_data_from_tunnel = match get_data_from_tunnel(message, &hosts) {
+        DataFromTunnel::EncodedMessage(x) => x,
+        DataFromTunnel::HostsQueryLookup(lookup) => {
+            let answer = lookup.record_iter().next().unwrap();
+            log::debug!(
+                "received hosts lookup {} -> {:?}",
+                lookup.query().name().to_string(),
+                answer.rdata()
+            );
+            let response = create_response(message, answer);
+            response_handle.send_response(response).unwrap_or_else(|e| {
+                log::error!("{}: failed to send response: {}", message.id(), e);
+            });
+            return;
+        }
+        DataFromTunnel::None => return,
     };
 
     log::debug!("received from tunnel {:?}", encoded_data_from_tunnel);
@@ -204,24 +229,35 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     });
 }
 
-fn get_data_from_tunnel(message: &MessageRequest) -> Option<String> {
+fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunnel {
     let first_query = match message.queries().len() {
         1 => (&message.queries()[0]).original(),
         x => {
             log::error!("{}: unexpected number of queries {}", message.id(), x);
-            return None;
+            return DataFromTunnel::None;
         }
     };
 
-    let data_from_tunnel = match first_query.query_type() {
-        RecordType::TXT => first_query.name().to_string(),
+    match first_query.query_type() {
+        RecordType::TXT => DataFromTunnel::EncodedMessage(first_query.name().to_string()),
+        RecordType::A | RecordType::AAAA => {
+            let non_fqdn_query = get_non_fqdn_query(first_query);
+            match hosts.lookup_static_host(&non_fqdn_query) {
+                Some(x) => DataFromTunnel::HostsQueryLookup(x),
+                None => DataFromTunnel::None,
+            }
+        }
         x => {
             log::error!("{}: unexpected type of query {}", message.id(), x);
-            return None;
+            DataFromTunnel::None
         }
-    };
+    }
+}
 
-    Some(data_from_tunnel)
+fn get_non_fqdn_query(query: &Query) -> Query {
+    let mut query_name = query.name().clone();
+    query_name.set_fqdn(false);
+    Query::query(query_name, query.query_type())
 }
 
 async fn untunnel_data<F: StreamCreator>(
@@ -373,6 +409,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -408,6 +445,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -441,6 +479,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -479,6 +518,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -520,6 +560,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -561,6 +602,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -609,6 +651,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -657,6 +700,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -706,6 +750,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -758,6 +803,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())
@@ -808,6 +854,7 @@ mod tests {
             decoder_mock,
             encoder_mock,
             Duration::from_millis(100),
+            Arc::new(Hosts::new()),
         )
         .await;
         Ok(())

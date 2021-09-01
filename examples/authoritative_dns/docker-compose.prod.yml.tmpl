@@ -4,5 +4,11 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD}
 
   redis-dns-tunnel:
+    environment:
+      CLIENT_SUFFIX: .dlemel8.xyz
     ports:
       - "${PUBLIC_IP}:53:53/udp"
+    extra_hosts:
+      - "dlemel8.xyz:${PUBLIC_IP}"
+      - "ns1.dlemel8.xyz:${PUBLIC_IP}"
+      - "ns2.dlemel8.xyz:${PUBLIC_IP}"
