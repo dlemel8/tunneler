@@ -5,6 +5,7 @@ use std::future::Future;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_channel::Sender;
@@ -17,8 +18,7 @@ use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
 use trust_dns_client::op::{Edns, Header, MessageType, OpCode, Query};
 use trust_dns_client::proto::rr::rdata::TXT;
-use trust_dns_client::proto::rr::{DNSClass, RData, Record, RecordType};
-use trust_dns_resolver::lookup::Lookup;
+use trust_dns_client::proto::rr::{DNSClass, Name, RData, Record, RecordType};
 use trust_dns_resolver::Hosts;
 use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageResponseBuilder};
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
@@ -137,15 +137,16 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
         request: Request,
         response_handle: R,
     ) -> Self::ResponseFuture {
-        let mut client_suffix = self.client_suffix.clone();
-        client_suffix.push('.'); // add fqdn root
         Box::pin(untunnel_request(
             request,
             ResponseHandlerWrapper {
                 handler: response_handle,
             },
             self.untunneled_clients.clone(),
-            AppendSuffixDecoder::new(ClientIdSuffixDecoder::new(HexDecoder {}), client_suffix),
+            AppendSuffixDecoder::new(
+                ClientIdSuffixDecoder::new(HexDecoder {}),
+                self.client_suffix.clone(),
+            ),
             HexEncoder {},
             self.read_timeout,
             self.hosts.clone(),
@@ -154,8 +155,8 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
 }
 
 enum DataFromTunnel {
-    EncodedMessage(String),
-    HostsQueryLookup(Lookup),
+    ClientEncodedMessage(String),
+    AuthoritativeManagementMessage(Box<Query>, Box<Record>),
     None,
 }
 
@@ -170,15 +171,14 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
 ) {
     let message = &request.message;
     let encoded_data_from_tunnel = match get_data_from_tunnel(message, &hosts) {
-        DataFromTunnel::EncodedMessage(x) => x,
-        DataFromTunnel::HostsQueryLookup(lookup) => {
-            let answer = lookup.record_iter().next().unwrap();
+        DataFromTunnel::ClientEncodedMessage(x) => x,
+        DataFromTunnel::AuthoritativeManagementMessage(query, answer) => {
             log::debug!(
                 "received hosts lookup {} -> {:?}",
-                lookup.query().name().to_string(),
+                query.name().to_string(),
                 answer.rdata()
             );
-            let response = create_response(message, answer);
+            let response = create_response(message, &answer);
             response_handle.send_response(response).unwrap_or_else(|e| {
                 log::error!("{}: failed to send response: {}", message.id(), e);
             });
@@ -238,14 +238,30 @@ fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunn
         }
     };
 
-    match first_query.query_type() {
-        RecordType::TXT => DataFromTunnel::EncodedMessage(first_query.name().to_string()),
-        RecordType::A | RecordType::AAAA => {
-            let non_fqdn_query = get_non_fqdn_query(first_query);
-            match hosts.lookup_static_host(&non_fqdn_query) {
-                Some(x) => DataFromTunnel::HostsQueryLookup(x),
-                None => DataFromTunnel::None,
+    let non_fqdn_query = get_non_fqdn_query(first_query);
+    match non_fqdn_query.query_type() {
+        RecordType::TXT => DataFromTunnel::ClientEncodedMessage(non_fqdn_query.name().to_string()),
+        RecordType::A | RecordType::AAAA => match hosts.lookup_static_host(&non_fqdn_query) {
+            Some(lookup) => {
+                let answer = lookup.record_iter().next().unwrap().clone();
+                DataFromTunnel::AuthoritativeManagementMessage(
+                    Box::new(non_fqdn_query),
+                    Box::new(answer),
+                )
             }
+            None => DataFromTunnel::None,
+        },
+        RecordType::NS => {
+            let name = format!("ns1.{}", non_fqdn_query.name().to_string());
+            let answer = Record::new()
+                .set_rdata(RData::NS(Name::from_str(name.as_str()).unwrap()))
+                .set_record_type(RecordType::NS)
+                .set_dns_class(DNSClass::IN)
+                .clone();
+            DataFromTunnel::AuthoritativeManagementMessage(
+                Box::new(non_fqdn_query),
+                Box::new(answer),
+            )
         }
         x => {
             log::error!("{}: unexpected type of query {}", message.id(), x);
