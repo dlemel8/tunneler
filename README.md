@@ -2,7 +2,7 @@
 This repo contains client and server that allow you to tunnel TCP traffic via other network protocols.
 
 Currently, supported tunnels are:
-* DNS tunneling
+* DNS tunneling (authoritative DNS server or direct connection)
 * TCP proxy
 
 Main tool is writen in Rust and end-to-end tests are written in Python.
@@ -37,11 +37,13 @@ LOG_LEVEL=debug \
 ```
 Run docker image or compiled binary with `--help` for more information
 
-## Deployment Example
-This repo contains a [docker compose file](examples/speed_test/docker-compose.server.yml) with the following services:
-* speed test, based on iperf3 server, exporting port tcp/45201 to host
-* speed test tcp proxy, based on tunneler server, exporting port tcp/45301 to host
-* speed test dns tunnel, based on tunneler server, exporting port udp/53 to host
+## Examples
+This repo contains a few server deployment examples using Docker Compose:
+* Speed Test - iperf3 server exposed via all supported tunnels, allow you to compare tunnels speed.
+* Authoritative DNS - Redis server exposed via DNS tunnel on port UDP/53. Since tunnel is not verify client, Redis 
+authentication is needed.
+
+You can run each example locally or deploy it using Terraform and Ansible. See more information [here](examples/README.md).
 
 ## Architecture
 ![Architecture](images/architecture.jpg?raw=true "Architecture")
@@ -54,13 +56,19 @@ We have a few challenges here:
 * Every message requires a response before we can send next message.
 
 To solve those challenges, each client session starts with generating a random Client ID. Client reads data to tunnel 
-and run it via a composition of encoders: 
+and run it via a pipeline of encoders: 
 * Data is encoded in hex. 
-* Client ID is appended to encoded data.
+* Client ID is appended.
+* Client suffix appended. In case the server is running on your authoritative DNS server, suffix is ".\<your domain>".
 
-Final data is then embedded in a DNS query name, requesting TXT record.
+Encoded data is then used as the name of a TXT DNS query.
 
-Server extracts original data and get or create Client ID in an in-memory Clients Cache. Clients Cache maps Client ID 
+If you own an authoritative DNS server, client can send the request to a recursive DNS resolver. Resolver will get your 
+IP from your domain name registrar and forward the request to your IP. Another option (faster but more obvious to any 
+traffic analyzer) is configuring client to send the request directly to your IP (on port UDP/53 or any other port server 
+is listening to).
+
+Server decodes data (ignoring any non client traffic) and get or create Client ID in an in-memory Clients Cache. Clients Cache maps Client ID 
 into in-memory reader and writer. Original data is then forwarded using TCP to target service.
 
 In order to handle large server responses and empty TCP ACKs, read timeout is used in both client and server. If read 
