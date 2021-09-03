@@ -343,14 +343,14 @@ fn create_response<'a>(
 ) -> MessageResponse<'a, 'a> {
     let mut builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
 
-    if let Some(message_edns) = message.edns() {
-        let mut edns = Edns::new();
-        edns.set_dnssec_ok(false);
-        edns.set_max_payload(message_edns.max_payload());
-        edns.set_version(message_edns.version());
-
-        builder.edns(edns);
-    }
+    // if let Some(message_edns) = message.edns() {
+    //     let mut edns = Edns::new();
+    //     edns.set_dnssec_ok(false);
+    //     edns.set_max_payload(message_edns.max_payload());
+    //     edns.set_version(message_edns.version());
+    //
+    //     builder.edns(edns);
+    // }
 
     let mut response_header = Header::new();
     response_header.set_id(message.id());
