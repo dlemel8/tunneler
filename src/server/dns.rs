@@ -231,6 +231,8 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     });
 }
 
+const DNS_TTL: u32 = 86400_u32;
+
 fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunnel {
     let first_query = match message.queries().len() {
         1 => (&message.queries()[0]).original(),
@@ -241,8 +243,9 @@ fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunn
     };
 
     let non_fqdn_query = get_non_fqdn_query(first_query);
+    let non_fqdn_query_name= non_fqdn_query.name();
     match non_fqdn_query.query_type() {
-        RecordType::TXT => DataFromTunnel::ClientEncodedMessage(non_fqdn_query.name().to_string()),
+        RecordType::TXT => DataFromTunnel::ClientEncodedMessage(non_fqdn_query_name.to_string()),
         RecordType::A | RecordType::AAAA => match hosts.lookup_static_host(&non_fqdn_query) {
             Some(lookup) => {
                 let answer = lookup.record_iter().next().unwrap().clone();
@@ -256,14 +259,12 @@ fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunn
         RecordType::NS => {
             let mut answers = vec![];
             for x in 1..=2 {
-                let name = format!("ns{}.{}", x, non_fqdn_query.name().to_string());
-                answers.push(
-                    Record::new()
-                        .set_rdata(RData::NS(Name::from_str(name.as_str()).unwrap()))
-                        .set_record_type(RecordType::NS)
-                        .set_dns_class(DNSClass::IN)
-                        .clone(),
-                );
+                let name = format!("ns{}.{}", x, non_fqdn_query_name);
+                answers.push(Record::from_rdata(
+                    non_fqdn_query_name.clone(),
+                    DNS_TTL,
+                    RData::NS(Name::from_str(name.as_str()).unwrap()),
+                ));
             }
             DataFromTunnel::AuthoritativeManagementMessage(Box::new(non_fqdn_query), answers)
         }
