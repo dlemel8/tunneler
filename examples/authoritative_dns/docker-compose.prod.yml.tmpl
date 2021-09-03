@@ -8,8 +8,3 @@ services:
       CLIENT_SUFFIX: .dlemel8.xyz
     ports:
       - "${PUBLIC_IP}:53:53/udp"
-    extra_hosts:
-      - "dlemel8.xyz:${PUBLIC_IP}"
-      - "ns1.dlemel8.xyz:${PUBLIC_IP}"
-      - "ns2.dlemel8.xyz:${PUBLIC_IP}"
-      - "www.dlemel8.xyz:${PUBLIC_IP}"
