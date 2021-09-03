@@ -163,7 +163,10 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         None => return,
     };
 
-    log::debug!("received from tunnel {}", encoded_data_from_tunnel.to_string());
+    log::debug!(
+        "received from tunnel {}",
+        encoded_data_from_tunnel.to_string()
+    );
     let mut non_fqdn_encoded_data = encoded_data_from_tunnel.clone();
     non_fqdn_encoded_data.set_fqdn(false);
     let data_from_tunnel = match decoder.decode(&non_fqdn_encoded_data.to_string()) {
