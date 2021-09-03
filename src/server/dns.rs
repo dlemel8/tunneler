@@ -180,11 +180,11 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
                 query.name().to_string(),
                 answers
             );
-            let answers_references = answers.iter().collect::<Vec<&Record>>();
-            let response = create_response(message, answers_references);
-            response_handle.send_response(response).unwrap_or_else(|e| {
-                log::error!("{}: failed to send response: {}", message.id(), e);
-            });
+            // let answers_references = answers.iter().collect::<Vec<&Record>>();
+            // let response = create_response(message, answers_references);
+            // response_handle.send_response(response).unwrap_or_else(|e| {
+            //     log::error!("{}: failed to send response: {}", message.id(), e);
+            // });
             return;
         }
         DataFromTunnel::None => return,
@@ -222,7 +222,7 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
     let answer = Record::from_rdata(
         message.queries()[0].original().name().clone(),
-        DNS_TTL,
+        0,
         RData::TXT(TXT::new(vec![encoded_data_to_tunnel])),
     );
 
