@@ -18,7 +18,7 @@ use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
 use trust_dns_client::op::{Edns, Header, MessageType, OpCode, Query};
 use trust_dns_client::proto::rr::rdata::TXT;
-use trust_dns_client::proto::rr::{DNSClass, Name, RData, Record, RecordType};
+use trust_dns_client::proto::rr::{Name, RData, Record, RecordType};
 use trust_dns_resolver::Hosts;
 use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageResponseBuilder};
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
@@ -160,6 +160,8 @@ enum DataFromTunnel {
     None,
 }
 
+const DNS_TTL: u32 = 86400_u32;
+
 async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E: Encoder>(
     request: Request,
     mut response_handle: R,
@@ -218,11 +220,11 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         }
     };
     log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
-    let answer = Record::new()
-        .set_rdata(RData::TXT(TXT::new(vec![encoded_data_to_tunnel])))
-        .set_record_type(RecordType::TXT)
-        .set_dns_class(DNSClass::IN)
-        .clone();
+    let answer = Record::from_rdata(
+        message.queries()[0].original().name().clone(),
+        DNS_TTL,
+        RData::TXT(TXT::new(vec![encoded_data_to_tunnel])),
+    );
 
     let answers = vec![&answer];
     let response = create_response(message, answers);
@@ -230,8 +232,6 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         log::error!("{}: failed to send response: {}", message.id(), e);
     });
 }
-
-const DNS_TTL: u32 = 86400_u32;
 
 fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunnel {
     let first_query = match message.queries().len() {
