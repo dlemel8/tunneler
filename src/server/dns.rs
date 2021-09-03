@@ -243,7 +243,7 @@ fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunn
     };
 
     let non_fqdn_query = get_non_fqdn_query(first_query);
-    let non_fqdn_query_name= non_fqdn_query.name();
+    let non_fqdn_query_name = non_fqdn_query.name();
     match non_fqdn_query.query_type() {
         RecordType::TXT => DataFromTunnel::ClientEncodedMessage(non_fqdn_query_name.to_string()),
         RecordType::A | RecordType::AAAA => match hosts.lookup_static_host(&non_fqdn_query) {
