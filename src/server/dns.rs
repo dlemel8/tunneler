@@ -16,7 +16,7 @@ use tokio::io::{duplex, split};
 use tokio::net::UdpSocket;
 use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
-use trust_dns_client::op::{Edns, Header, MessageType, OpCode, Query};
+use trust_dns_client::op::{Header, MessageType, OpCode, Query};
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{Name, RData, Record, RecordType};
 use trust_dns_resolver::Hosts;
@@ -341,7 +341,7 @@ fn create_response<'a>(
     message: &'a MessageRequest,
     answers: Vec<&'a Record>,
 ) -> MessageResponse<'a, 'a> {
-    let mut builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
+    let builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
 
     // if let Some(message_edns) = message.edns() {
     //     let mut edns = Edns::new();
