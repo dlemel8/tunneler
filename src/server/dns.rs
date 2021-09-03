@@ -156,7 +156,7 @@ impl<F: StreamCreator> RequestHandler for UntunnelRequestHandler<F> {
 
 enum DataFromTunnel {
     ClientEncodedMessage(String),
-    AuthoritativeManagementMessage(Box<Query>, Box<Record>),
+    AuthoritativeManagementMessage(Box<Query>, Vec<Record>),
     None,
 }
 
@@ -172,13 +172,14 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     let message = &request.message;
     let encoded_data_from_tunnel = match get_data_from_tunnel(message, &hosts) {
         DataFromTunnel::ClientEncodedMessage(x) => x,
-        DataFromTunnel::AuthoritativeManagementMessage(query, answer) => {
+        DataFromTunnel::AuthoritativeManagementMessage(query, answers) => {
             log::debug!(
                 "received hosts lookup {} -> {:?}",
                 query.name().to_string(),
-                answer.rdata()
+                answers
             );
-            let response = create_response(message, &answer);
+            let answers_references = answers.iter().collect::<Vec<&Record>>();
+            let response = create_response(message, answers_references);
             response_handle.send_response(response).unwrap_or_else(|e| {
                 log::error!("{}: failed to send response: {}", message.id(), e);
             });
@@ -223,7 +224,8 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         .set_dns_class(DNSClass::IN)
         .clone();
 
-    let response = create_response(message, &answer);
+    let answers = vec![&answer];
+    let response = create_response(message, answers);
     response_handle.send_response(response).unwrap_or_else(|e| {
         log::error!("{}: failed to send response: {}", message.id(), e);
     });
@@ -246,22 +248,24 @@ fn get_data_from_tunnel(message: &MessageRequest, hosts: &Hosts) -> DataFromTunn
                 let answer = lookup.record_iter().next().unwrap().clone();
                 DataFromTunnel::AuthoritativeManagementMessage(
                     Box::new(non_fqdn_query),
-                    Box::new(answer),
+                    vec![answer],
                 )
             }
             None => DataFromTunnel::None,
         },
         RecordType::NS => {
-            let name = format!("ns1.{}", non_fqdn_query.name().to_string());
-            let answer = Record::new()
-                .set_rdata(RData::NS(Name::from_str(name.as_str()).unwrap()))
-                .set_record_type(RecordType::NS)
-                .set_dns_class(DNSClass::IN)
-                .clone();
-            DataFromTunnel::AuthoritativeManagementMessage(
-                Box::new(non_fqdn_query),
-                Box::new(answer),
-            )
+            let mut answers = vec![];
+            for x in 1..=2 {
+                let name = format!("ns{}.{}", x, non_fqdn_query.name().to_string());
+                answers.push(
+                    Record::new()
+                        .set_rdata(RData::NS(Name::from_str(name.as_str()).unwrap()))
+                        .set_record_type(RecordType::NS)
+                        .set_dns_class(DNSClass::IN)
+                        .clone(),
+                );
+            }
+            DataFromTunnel::AuthoritativeManagementMessage(Box::new(non_fqdn_query), answers)
         }
         x => {
             log::error!("{}: unexpected type of query {}", message.id(), x);
@@ -332,7 +336,10 @@ async fn untunnel_data<F: StreamCreator>(
     Some(data_to_tunnel)
 }
 
-fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> MessageResponse<'a, 'a> {
+fn create_response<'a>(
+    message: &'a MessageRequest,
+    answers: Vec<&'a Record>,
+) -> MessageResponse<'a, 'a> {
     let mut builder = MessageResponseBuilder::new(Option::from(message.raw_queries()));
 
     if let Some(message_edns) = message.edns() {
@@ -353,7 +360,7 @@ fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> Messa
 
     builder.build(
         response_header,
-        new_iterator(Some(answer)),
+        new_iterator(Some(answers)),
         new_iterator(None),
         new_iterator(None),
         new_iterator(None),
@@ -361,11 +368,11 @@ fn create_response<'a>(message: &'a MessageRequest, answer: &'a Record) -> Messa
 }
 
 fn new_iterator<'a>(
-    record: Option<&'a Record>,
+    records: Option<Vec<&'a Record>>,
 ) -> Box<dyn Iterator<Item = &'a Record> + Send + 'a> {
-    match record {
+    match records {
         None => Box::new(IntoIter::new([])),
-        Some(r) => Box::new(IntoIter::new([r])),
+        Some(r) => Box::new(r.into_iter()),
     }
 }
 
