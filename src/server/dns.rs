@@ -17,7 +17,7 @@ use tokio::time::timeout;
 use tokio::time::{Duration, Instant};
 use trust_dns_client::op::{Header, MessageType, OpCode};
 use trust_dns_client::proto::rr::rdata::TXT;
-use trust_dns_client::proto::rr::{RData, Record, RecordType};
+use trust_dns_client::proto::rr::{Name, RData, Record, RecordType};
 use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageResponseBuilder};
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
 use trust_dns_server::ServerFuture;
@@ -163,8 +163,10 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
         None => return,
     };
 
-    log::debug!("received from tunnel {:?}", encoded_data_from_tunnel);
-    let data_from_tunnel = match decoder.decode(&encoded_data_from_tunnel) {
+    log::debug!("received from tunnel {}", encoded_data_from_tunnel.to_string());
+    let mut non_fqdn_encoded_data = encoded_data_from_tunnel.clone();
+    non_fqdn_encoded_data.set_fqdn(false);
+    let data_from_tunnel = match decoder.decode(&non_fqdn_encoded_data.to_string()) {
         Ok(x) => x,
         Err(e) => {
             log::error!("{}: failed to decode: {}", message.id(), e);
@@ -194,7 +196,7 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     };
     log::debug!("sending to tunnel {:?}", encoded_data_to_tunnel);
     let answer = Record::from_rdata(
-        message.queries()[0].original().name().clone(),
+        encoded_data_from_tunnel,
         0,
         RData::TXT(TXT::new(vec![encoded_data_to_tunnel])),
     );
@@ -205,7 +207,7 @@ async fn untunnel_request<R: DnsResponseHandler, F: StreamCreator, D: Decoder, E
     });
 }
 
-fn get_data_from_tunnel(message: &MessageRequest) -> Option<String> {
+fn get_data_from_tunnel(message: &MessageRequest) -> Option<Name> {
     let first_query = match message.queries().len() {
         1 => (&message.queries()[0]).original(),
         x => {
@@ -214,10 +216,8 @@ fn get_data_from_tunnel(message: &MessageRequest) -> Option<String> {
         }
     };
 
-    let mut non_fqdn_query_name = first_query.name().clone();
-    non_fqdn_query_name.set_fqdn(false);
     let data_from_tunnel = match first_query.query_type() {
-        RecordType::TXT => non_fqdn_query_name.to_string(),
+        RecordType::TXT => first_query.name().clone(),
         x => {
             log::error!("{}: unexpected type of query {}", message.id(), x);
             return None;
