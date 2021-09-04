@@ -1,6 +1,6 @@
 [package]
 name = "tunneler"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Daniel Segal <dlemel8@gmail.com>"]
 edition = "2018"
 license = "MIT"
