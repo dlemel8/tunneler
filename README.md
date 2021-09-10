@@ -10,8 +10,8 @@ Main tool is writen in Rust and end-to-end tests are written in Python.
 ## Installation
 ### Option 1: client and server docker images
 ```sh
-docker pull ghcr.io/dlemel8/tunneler-server:main
-docker pull ghcr.io/dlemel8/tunneler-client:main
+docker pull ghcr.io/dlemel8/tunneler-server:latest
+docker pull ghcr.io/dlemel8/tunneler-client:latest
 ```
 ### Option 2: compile from source code
 ```sh
@@ -26,7 +26,7 @@ There is also a [docker file](Dockerfile) if you prefer to build a local docker 
 docker run -e LOCAL_PORT=45301 \
            -e REMOTE_PORT=5201 \
            -e REMOTE_ADDRESS=localhost \
-           --rm -p 45301:45301 ghcr.io/dlemel8/tunneler-server:main tcp
+           --rm -p 45301:45301 ghcr.io/dlemel8/tunneler-server:latest tcp
 ```
 ### Option 2: locally compiled binary
 ```sh

@@ -1,11 +1,7 @@
-use std::error::Error;
 use std::io;
-use std::net::IpAddr;
 
-use async_channel::Sender;
 use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 
 #[async_trait]
 pub trait AsyncReader: Send {
@@ -96,32 +92,5 @@ impl Stream {
             reader: Box::new(AsyncReadWrapper::new(reader)),
             writer: Box::new(AsyncWriteWrapper::new(writer)),
         }
-    }
-}
-
-pub struct TcpServer {
-    listener: TcpListener,
-}
-
-impl TcpServer {
-    pub async fn new(local_address: IpAddr, local_port: u16) -> Result<Self, Box<dyn Error>> {
-        let listener_address = format!("{}:{}", local_address, local_port);
-        log::info!("start listening on {}", listener_address);
-        let listener = TcpListener::bind(listener_address).await?;
-        Ok(Self { listener })
-    }
-
-    pub async fn accept_clients(
-        &mut self,
-        new_clients: Sender<Stream>,
-    ) -> Result<(), Box<dyn Error>> {
-        while let Ok((client_stream, client_address)) = self.listener.accept().await {
-            log::debug!("got connection from {}", client_address);
-            let (client_reader, client_writer) = client_stream.into_split();
-            new_clients
-                .send(Stream::new(client_reader, client_writer))
-                .await?;
-        }
-        Ok(())
     }
 }

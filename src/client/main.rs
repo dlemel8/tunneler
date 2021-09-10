@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Receiver;
@@ -7,11 +8,11 @@ use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 
 use common::cli::{Cli, TunnelType};
-use common::io::{Stream, TcpServer};
+use common::io::Stream;
+use common::network::{Listener, TcpListener};
 
 use crate::dns::DnsTunneler;
 use crate::tunnel::{TcpTunneler, Tunneler};
-use std::sync::Arc;
 
 mod dns;
 mod tunnel;
@@ -31,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 #[tokio::main]
 async fn start_client(args: Cli) -> Result<(), Box<dyn Error>> {
     // TODO - support both TCP and UDP?
-    let mut server = TcpServer::new(args.local_address, args.local_port).await?;
+    let mut server = TcpListener::new(args.local_address, args.local_port).await?;
     let (clients_sender, clients_receiver) = async_channel::unbounded::<Stream>();
 
     let tunnel_type = Arc::new(args.tunnel_type);

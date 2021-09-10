@@ -4,7 +4,8 @@ use std::net::IpAddr;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 
-use common::io::{Stream, TcpServer};
+use common::io::Stream;
+use common::network::{Listener, TcpListener};
 
 #[async_trait(?Send)]
 pub(crate) trait Untunneler {
@@ -12,7 +13,7 @@ pub(crate) trait Untunneler {
 }
 
 pub(crate) struct TcpUntunneler {
-    server: TcpServer,
+    server: TcpListener,
 }
 
 impl TcpUntunneler {
@@ -20,7 +21,7 @@ impl TcpUntunneler {
         local_address: IpAddr,
         local_port: u16,
     ) -> Result<Self, Box<dyn Error>> {
-        let server = TcpServer::new(local_address, local_port).await?;
+        let server = TcpListener::new(local_address, local_port).await?;
         Ok(Self { server })
     }
 }
