@@ -3,7 +3,7 @@ import asyncio
 import aioredis
 import pytest
 
-from e2e_tests.conftest import TestPorts, run_tunneler_container, TunnelType
+from e2e_tests.conftest import TestPorts, run_tunneler_container, TunnelerType
 
 
 @pytest.mark.asyncio
@@ -88,7 +88,7 @@ async def test_multiple_clients_single_short_echo(echo_backend_server, tcp_serve
 async def test_multiple_tunnels_single_short_echo(echo_backend_server, tcp_server_container, client_image, tcp_client_container) -> None:
     container = run_tunneler_container(client_image,
                                        'test_another_client',
-                                       TunnelType.TCP,
+                                       TunnelerType.TCP,
                                        TestPorts.TUNNELER_PORT.value + 1,
                                        TestPorts.UNTUNNELER_PORT)
     try:

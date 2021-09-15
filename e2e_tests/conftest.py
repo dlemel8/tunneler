@@ -16,9 +16,14 @@ class TestPorts(Enum):
     TUNNELER_PORT = 8888
 
 
-class TunnelType(Enum):
+class TunnelerType(Enum):
     TCP = 'tcp'
     DNS = 'dns'
+
+
+class TunneledType(Enum):
+    TCP = 'tcp'
+    UDP = 'udp'
 
 
 async def echo_handler(reader: StreamReader, writer: StreamWriter) -> None:
@@ -79,7 +84,7 @@ def build_tunneler_image(executable: str, image_name: str) -> Image:
 
 def run_tunneler_container(image: Image,
                            container_name: str,
-                           tunnel_type: TunnelType,
+                           tunnel_type: TunnelerType,
                            local_port: Union[TestPorts, int],
                            remote_port: TestPorts,
                            extra_env_vars: Optional[Dict[str, Any]] = None) -> Container:
@@ -101,6 +106,7 @@ def run_tunneler_container(image: Image,
             'LOCAL_PORT': local_port_value,
             'REMOTE_PORT': remote_port.value,
             'REMOTE_ADDRESS': '127.0.0.1',
+            'TUNNELED_TYPE': TunneledType.TCP.value,
             'LOG_LEVEL': 'debug',
             **extra_env_vars,
         },
@@ -119,7 +125,7 @@ def server_image() -> Image:
 def dns_server_container(server_image: Image) -> Container:
     container = run_tunneler_container(server_image,
                                        'test_server',
-                                       TunnelType.DNS,
+                                       TunnelerType.DNS,
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
@@ -135,7 +141,7 @@ def dns_server_container(server_image: Image) -> Container:
 def tcp_server_container(server_image: Image) -> Container:
     container = run_tunneler_container(server_image,
                                        'test_server',
-                                       TunnelType.TCP,
+                                       TunnelerType.TCP,
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT)
     yield container
@@ -155,7 +161,7 @@ def client_image() -> Image:
 def dns_client_container(client_image: Image) -> Container:
     container = run_tunneler_container(client_image,
                                        'test_client',
-                                       TunnelType.DNS,
+                                       TunnelerType.DNS,
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
@@ -171,7 +177,7 @@ def dns_client_container(client_image: Image) -> Container:
 def tcp_client_container(client_image: Image) -> Container:
     container = run_tunneler_container(client_image,
                                        'test_client',
-                                       TunnelType.TCP,
+                                       TunnelerType.TCP,
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT)
     yield container
