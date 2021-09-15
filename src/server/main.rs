@@ -7,7 +7,7 @@ use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 use tokio::net::TcpStream;
 
-use common::cli::{Cli, TunnelType};
+use common::cli::{Cli, TunnelerType};
 use common::io::{copy, Stream};
 
 use crate::dns::DnsUntunneler;
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 #[tokio::main]
 async fn start_server(args: Cli) -> Result<(), Box<dyn Error>> {
     let mut untunneler =
-        new_untunneler(args.tunnel_type, args.local_address, args.local_port).await?;
+        new_untunneler(args.tunneler_type, args.local_address, args.local_port).await?;
     let (untunneled_sender, untunneled_receiver) = async_channel::unbounded::<Stream>();
 
     let untunnel_clients_future = untunneler.untunnel(untunneled_sender);
@@ -45,13 +45,13 @@ async fn start_server(args: Cli) -> Result<(), Box<dyn Error>> {
 }
 
 async fn new_untunneler(
-    tunnel_type: TunnelType,
+    type_: TunnelerType,
     address: IpAddr,
     port: u16,
 ) -> Result<Box<dyn Untunneler>, Box<dyn Error>> {
-    match tunnel_type {
-        TunnelType::Tcp => Ok(Box::new(TcpUntunneler::new(address, port).await?)),
-        TunnelType::Dns {
+    match type_ {
+        TunnelerType::Tcp => Ok(Box::new(TcpUntunneler::new(address, port).await?)),
+        TunnelerType::Dns {
             read_timeout_in_milliseconds,
             idle_client_timeout_in_milliseconds,
             client_suffix,

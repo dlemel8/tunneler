@@ -7,14 +7,16 @@ use async_channel::Receiver;
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 
-use common::cli::{Cli, TunnelType};
+use common::cli::{Cli, TunneledType, TunnelerType};
 use common::io::Stream;
 use common::network::{Listener, TcpListener};
 
 use crate::dns::DnsTunneler;
+use crate::network::UdpListener;
 use crate::tunnel::{TcpTunneler, Tunneler};
 
 mod dns;
+mod network;
 mod tunnel;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -31,12 +33,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[tokio::main]
 async fn start_client(args: Cli) -> Result<(), Box<dyn Error>> {
-    // TODO - support both TCP and UDP?
-    let mut server = TcpListener::new(args.local_address, args.local_port).await?;
+    let mut listener =
+        new_listener(args.tunneled_type, args.local_address, args.local_port).await?;
     let (clients_sender, clients_receiver) = async_channel::unbounded::<Stream>();
 
-    let tunnel_type = Arc::new(args.tunnel_type);
-    let accept_clients_future = server.accept_clients(clients_sender);
+    let tunnel_type = Arc::new(args.tunneler_type);
+    let accept_clients_future = listener.accept_clients(clients_sender);
     let tunnel_clients_future = tunnel_clients(
         clients_receiver,
         tunnel_type.clone(),
@@ -49,14 +51,25 @@ async fn start_client(args: Cli) -> Result<(), Box<dyn Error>> {
     }
 }
 
+async fn new_listener(
+    type_: TunneledType,
+    address: IpAddr,
+    port: u16,
+) -> Result<Box<dyn Listener>, Box<dyn Error>> {
+    match type_ {
+        TunneledType::Tcp => Ok(Box::new(TcpListener::new(address, port).await?)),
+        TunneledType::Udp => Ok(Box::new(UdpListener::new(address, port).await?)),
+    }
+}
+
 async fn new_tunneler(
-    tunnel_type: &TunnelType,
+    type_: &TunnelerType,
     address: IpAddr,
     port: u16,
 ) -> Result<Box<dyn Tunneler>, Box<dyn Error>> {
-    match tunnel_type {
-        TunnelType::Tcp => Ok(Box::new(TcpTunneler::new(address, port).await?)),
-        TunnelType::Dns {
+    match type_ {
+        TunnelerType::Tcp => Ok(Box::new(TcpTunneler::new(address, port).await?)),
+        TunnelerType::Dns {
             read_timeout_in_milliseconds,
             idle_client_timeout_in_milliseconds,
             client_suffix,
@@ -75,7 +88,7 @@ async fn new_tunneler(
 
 async fn tunnel_clients(
     clients: Receiver<Stream>,
-    tunnel_type: Arc<TunnelType>,
+    tunnel_type: Arc<TunnelerType>,
     remote_address: IpAddr,
     remote_port: u16,
 ) -> Result<(), Box<dyn Error>> {
@@ -92,7 +105,7 @@ async fn tunnel_clients(
 
 async fn tunnel_client(
     client: Stream,
-    tunnel_type: Arc<TunnelType>,
+    tunnel_type: Arc<TunnelerType>,
     remote_address: IpAddr,
     remote_port: u16,
 ) {

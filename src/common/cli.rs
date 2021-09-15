@@ -2,11 +2,11 @@ use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
 
-use structopt::StructOpt;
+use structopt::{clap::arg_enum, StructOpt};
 use trust_dns_resolver::Resolver;
 
 #[derive(StructOpt, Debug)]
-pub enum TunnelType {
+pub enum TunnelerType {
     Tcp,
     Dns {
         #[structopt(env)]
@@ -16,6 +16,14 @@ pub enum TunnelType {
         #[structopt(default_value = "", env)]
         client_suffix: String,
     },
+}
+
+arg_enum! {
+    #[derive(Debug)]
+    pub enum TunneledType {
+        Tcp,
+        Udp,
+    }
 }
 
 fn parse_or_resolve_ip(src: &str) -> Result<IpAddr, Box<dyn Error>> {
@@ -32,7 +40,10 @@ fn parse_or_resolve_ip(src: &str) -> Result<IpAddr, Box<dyn Error>> {
 #[derive(StructOpt, Debug)]
 pub struct Cli {
     #[structopt(subcommand)]
-    pub tunnel_type: TunnelType,
+    pub tunneler_type: TunnelerType,
+
+    #[structopt(env, possible_values = &TunneledType::variants(), case_insensitive = true)]
+    pub tunneled_type: TunneledType,
 
     #[structopt(env, parse(try_from_str = parse_or_resolve_ip))]
     pub remote_address: IpAddr,
