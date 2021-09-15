@@ -6,9 +6,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[async_trait]
 pub trait AsyncReader: Send {
     async fn read<'a>(&'a mut self, buf: &'a mut [u8]) -> io::Result<usize>;
+    async fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> io::Result<usize>;
 }
 
-struct AsyncReadWrapper<R: AsyncReadExt + Unpin> {
+pub struct AsyncReadWrapper<R: AsyncReadExt + Unpin> {
     reader: R,
 }
 
@@ -26,6 +27,13 @@ impl<R: AsyncReadExt + Unpin + Send> AsyncReader for AsyncReadWrapper<R> {
     {
         self.reader.read(buf).await
     }
+
+    async fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> io::Result<usize>
+    where
+        Self: Unpin,
+    {
+        self.reader.read_exact(buf).await
+    }
 }
 
 #[async_trait]
@@ -34,7 +42,7 @@ pub trait AsyncWriter: Send {
     async fn shutdown(&mut self) -> io::Result<()>;
 }
 
-struct AsyncWriteWrapper<W: AsyncWriteExt + Unpin> {
+pub struct AsyncWriteWrapper<W: AsyncWriteExt + Unpin> {
     writer: W,
 }
 
