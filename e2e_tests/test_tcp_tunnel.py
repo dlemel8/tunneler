@@ -3,11 +3,11 @@ import asyncio
 import aioredis
 import pytest
 
-from e2e_tests.conftest import TestPorts, run_tunneler_container, TunnelerType
+from e2e_tests.conftest import TestPorts, run_tunneler_container, TunnelerType, TunneledType
 
 
 @pytest.mark.asyncio
-async def test_single_client_single_short_echo(echo_backend_server, tcp_server_container, tcp_client_container) -> None:
+async def test_single_client_single_short_echo(tcp_echo_server, tcp_over_tcp_server, tcp_over_tcp_client) -> None:
     message_to_send = 'bla'
     reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
 
@@ -22,7 +22,7 @@ async def test_single_client_single_short_echo(echo_backend_server, tcp_server_c
 
 
 @pytest.mark.asyncio
-async def test_single_client_multiple_short_echo(echo_backend_server, tcp_server_container, tcp_client_container) -> None:
+async def test_single_client_multiple_short_echo(tcp_echo_server, tcp_over_tcp_server, tcp_over_tcp_client) -> None:
     messages_to_send = ['bla', 'bli', 'blu']
     reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
 
@@ -40,7 +40,7 @@ async def test_single_client_multiple_short_echo(echo_backend_server, tcp_server
 
 
 @pytest.mark.asyncio
-async def test_single_client_single_long_echo(echo_backend_server, tcp_server_container, tcp_client_container) -> None:
+async def test_single_client_single_long_echo(tcp_echo_server, tcp_over_tcp_server, tcp_over_tcp_client) -> None:
     message_to_send = 'bla' * 10_000
     reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
 
@@ -55,7 +55,7 @@ async def test_single_client_single_long_echo(echo_backend_server, tcp_server_co
 
 
 @pytest.mark.asyncio
-async def test_multiple_clients_single_short_echo(echo_backend_server, tcp_server_container, tcp_client_container) -> None:
+async def test_multiple_clients_single_short_echo(tcp_echo_server, tcp_over_tcp_server, tcp_over_tcp_client) -> None:
     message_to_send = 'bla'
     readers, writers = [], []
     for _ in range(3):
@@ -85,10 +85,11 @@ async def test_multiple_clients_single_short_echo(echo_backend_server, tcp_serve
 
 
 @pytest.mark.asyncio
-async def test_multiple_tunnels_single_short_echo(echo_backend_server, tcp_server_container, client_image, tcp_client_container) -> None:
+async def test_multiple_tunnels_single_short_echo(tcp_echo_server, tcp_over_tcp_server, client_image, tcp_over_tcp_client) -> None:
     container = run_tunneler_container(client_image,
                                        'test_another_client',
                                        TunnelerType.TCP,
+                                       TunneledType.TCP,
                                        TestPorts.TUNNELER_PORT.value + 1,
                                        TestPorts.UNTUNNELER_PORT)
     try:
@@ -126,7 +127,7 @@ async def test_multiple_tunnels_single_short_echo(echo_backend_server, tcp_serve
 
 
 @pytest.mark.asyncio
-async def test_server_long_response_and_empty_acks(redis_backend_server, tcp_server_container, tcp_client_container) -> None:
+async def test_server_long_response_and_empty_acks(redis_server, tcp_over_tcp_server, tcp_over_tcp_client) -> None:
     redis = aioredis.from_url(f'redis://127.0.0.1:{TestPorts.TUNNELER_PORT.value}/0')
     result = await redis.info()
     assert result

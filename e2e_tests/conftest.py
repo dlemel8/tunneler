@@ -26,7 +26,7 @@ class TunneledType(Enum):
     UDP = 'udp'
 
 
-async def echo_handler(reader: StreamReader, writer: StreamWriter) -> None:
+async def tcp_echo_handler(reader: StreamReader, writer: StreamWriter) -> None:
     while True:
         data = await reader.read(1024)
         if not data:
@@ -43,8 +43,8 @@ async def echo_handler(reader: StreamReader, writer: StreamWriter) -> None:
 
 
 @pytest.fixture
-async def echo_backend_server():
-    server = await asyncio.start_server(echo_handler, '127.0.0.1', TestPorts.BACKEND_PORT.value)
+async def tcp_echo_server():
+    server = await asyncio.start_server(tcp_echo_handler, '127.0.0.1', TestPorts.BACKEND_PORT.value)
     address = server.sockets[0].getsockname()
     print(f'serving backend on {address}')
 
@@ -56,7 +56,7 @@ async def echo_backend_server():
 
 
 @pytest.fixture
-async def redis_backend_server():
+async def redis_server():
     container = docker.run(
         'redis:6.0.12-alpine',
         name='redis_server',
@@ -84,7 +84,8 @@ def build_tunneler_image(executable: str, image_name: str) -> Image:
 
 def run_tunneler_container(image: Image,
                            container_name: str,
-                           tunnel_type: TunnelerType,
+                           tunneler_type: TunnelerType,
+                           tunneled_type: TunneledType,
                            local_port: Union[TestPorts, int],
                            remote_port: TestPorts,
                            extra_env_vars: Optional[Dict[str, Any]] = None) -> Container:
@@ -99,14 +100,14 @@ def run_tunneler_container(image: Image,
 
     return docker.run(
         image,
-        [tunnel_type.value],
+        [tunneler_type.value],
         name=container_name,
         detach=True,
         envs={
             'LOCAL_PORT': local_port_value,
             'REMOTE_PORT': remote_port.value,
             'REMOTE_ADDRESS': '127.0.0.1',
-            'TUNNELED_TYPE': TunneledType.TCP.value,
+            'TUNNELED_TYPE': tunneled_type.value,
             'LOG_LEVEL': 'debug',
             **extra_env_vars,
         },
@@ -122,10 +123,11 @@ def server_image() -> Image:
 
 
 @pytest.fixture
-def dns_server_container(server_image: Image) -> Container:
+def tcp_over_dns_server(server_image: Image) -> Container:
     container = run_tunneler_container(server_image,
                                        'test_server',
                                        TunnelerType.DNS,
+                                       TunneledType.TCP,
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
@@ -138,10 +140,11 @@ def dns_server_container(server_image: Image) -> Container:
 
 
 @pytest.fixture
-def tcp_server_container(server_image: Image) -> Container:
+def tcp_over_tcp_server(server_image: Image) -> Container:
     container = run_tunneler_container(server_image,
                                        'test_server',
                                        TunnelerType.TCP,
+                                       TunneledType.TCP,
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT)
     yield container
@@ -158,10 +161,11 @@ def client_image() -> Image:
 
 
 @pytest.fixture
-def dns_client_container(client_image: Image) -> Container:
+def tcp_over_dns_client(client_image: Image) -> Container:
     container = run_tunneler_container(client_image,
                                        'test_client',
                                        TunnelerType.DNS,
+                                       TunneledType.TCP,
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
@@ -174,10 +178,11 @@ def dns_client_container(client_image: Image) -> Container:
 
 
 @pytest.fixture
-def tcp_client_container(client_image: Image) -> Container:
+def tcp_over_tcp_client(client_image: Image) -> Container:
     container = run_tunneler_container(client_image,
                                        'test_client',
                                        TunnelerType.TCP,
+                                       TunneledType.TCP,
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT)
     yield container
