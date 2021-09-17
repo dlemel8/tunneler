@@ -4,6 +4,7 @@ from enum import Enum
 from os import getenv
 from typing import Union, Dict, Any, Optional
 
+import aioredis
 import pytest
 from python_on_whales import docker, Image, Container
 
@@ -115,6 +116,12 @@ def run_tunneler_container(image: Image,
     )
 
 
+def print_log_and_delete_container(container: Container) -> None:
+    print(f'{container.name} {container.logs()=}')
+    container.kill()
+    container.remove(force=True)
+
+
 @pytest.fixture(scope='session')
 def server_image() -> Image:
     image = build_tunneler_image('server', 'test_server')
@@ -134,9 +141,7 @@ def tcp_over_dns_server(server_image: Image) -> Container:
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300000,
                                                        'CLIENT_SUFFIX': DNS_SUFFIX})
     yield container
-    print(f'server {container.logs()=}')
-    container.kill()
-    container.remove(force=True)
+    print_log_and_delete_container(container)
 
 
 @pytest.fixture
@@ -148,9 +153,7 @@ def tcp_over_tcp_server(server_image: Image) -> Container:
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT)
     yield container
-    print(f'server {container.logs()=}')
-    container.kill()
-    container.remove(force=True)
+    print_log_and_delete_container(container)
 
 
 @pytest.fixture(scope='session')
@@ -172,9 +175,7 @@ def tcp_over_dns_client(client_image: Image) -> Container:
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000,
                                                        'CLIENT_SUFFIX': DNS_SUFFIX})
     yield container
-    print(f'client {container.logs()=}')
-    container.kill()
-    container.remove(force=True)
+    print_log_and_delete_container(container)
 
 
 @pytest.fixture
@@ -186,6 +187,118 @@ def tcp_over_tcp_client(client_image: Image) -> Container:
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT)
     yield container
-    print(f'client {container.logs()=}')
-    container.kill()
-    container.remove(force=True)
+    print_log_and_delete_container(container)
+
+
+async def run_test_tcp_single_client_single_short_echo() -> None:
+    message_to_send = 'bla'
+    reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
+
+    writer.write(message_to_send.encode())
+    await writer.drain()
+    data = await reader.readexactly(len(message_to_send))
+    received_message = data.decode()
+
+    writer.close()
+    await writer.wait_closed()
+
+    assert received_message == message_to_send
+
+
+async def run_test_tcp_single_client_multiple_short_echo() -> None:
+    messages_to_send = ['bla', 'bli', 'blu']
+    reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
+
+    received_messages = []
+    for message in messages_to_send:
+        writer.write(message.encode())
+        await writer.drain()
+        data = await reader.readexactly(len(message))
+        received_messages.append(data.decode())
+
+    writer.close()
+    await writer.wait_closed()
+
+    assert received_messages == messages_to_send
+
+
+async def run_test_tcp_single_client_single_long_echo() -> None:
+    message_to_send = 'bla' * 10_000
+    reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
+
+    writer.write(message_to_send.encode())
+    await writer.drain()
+    data = await reader.readexactly(len(message_to_send))
+    received_message = data.decode()
+    writer.close()
+    await writer.wait_closed()
+
+    assert received_message == message_to_send
+
+
+async def run_test_tcp_multiple_clients_single_short_echo() -> None:
+    message_to_send = 'bla'
+    readers, writers = [], []
+    for _ in range(3):
+        reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value)
+        readers.append(reader)
+        writers.append(writer)
+
+    write_tasks = []
+    for writer in writers:
+        writer.write(message_to_send.encode())
+        write_tasks.append(writer.drain())
+    await asyncio.gather(*write_tasks)
+
+    read_tasks = []
+    for reader in readers:
+        read_tasks.append(reader.readexactly(len(message_to_send)))
+    received_messages = [data.decode() for data in await asyncio.gather(*read_tasks)]
+
+    wait_close_tasks = []
+    for writer in writers:
+        writer.close()
+        wait_close_tasks.append(writer.wait_closed())
+    await asyncio.gather(*wait_close_tasks)
+
+    for message in received_messages:
+        assert message == message_to_send
+
+
+async def run_test_tcp_multiple_tunnels_single_short_echo(another_client_container: Container) -> None:
+    try:
+        message_to_send = 'bla'
+        readers, writers = [], []
+        for i in range(2):
+            reader, writer = await asyncio.open_connection('127.0.0.1', TestPorts.TUNNELER_PORT.value + i)
+            readers.append(reader)
+            writers.append(writer)
+
+        write_tasks = []
+        for writer in writers:
+            writer.write(message_to_send.encode())
+            write_tasks.append(writer.drain())
+        await asyncio.gather(*write_tasks)
+
+        read_tasks = []
+        for reader in readers:
+            read_tasks.append(reader.readexactly(len(message_to_send)))
+        received_messages = [data.decode() for data in await asyncio.gather(*read_tasks)]
+
+        wait_close_tasks = []
+        for writer in writers:
+            writer.close()
+            wait_close_tasks.append(writer.wait_closed())
+        await asyncio.gather(*wait_close_tasks)
+
+        for message in received_messages:
+            assert message == message_to_send
+
+    finally:
+        print_log_and_delete_container(another_client_container)
+
+
+async def run_test_tcp_server_long_response_and_empty_acks() -> None:
+    redis = aioredis.from_url(f'redis://127.0.0.1:{TestPorts.TUNNELER_PORT.value}/0')
+    result = await redis.info()
+    assert result
