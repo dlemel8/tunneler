@@ -8,7 +8,9 @@ use tokio::io::{duplex, split};
 use tokio::net;
 
 use common::io::{AsyncReadWrapper, AsyncReader, AsyncWriteWrapper, AsyncWriter, Stream};
-use common::network::{stream_udp_packet, unstream_udp, Listener, MAX_UDP_PACKET_SIZE};
+use common::network::{
+    stream_udp_packet, unstream_udp, Listener, MAX_UDP_PACKET_SIZE, STREAMED_UDP_PACKET_HEADER_SIZE,
+};
 
 pub struct UdpListener {
     socket: Arc<net::UdpSocket>,
@@ -32,7 +34,7 @@ impl Listener for UdpListener {
         while let Ok((size, client_address)) = self.socket.recv_from(&mut data).await {
             log::debug!("got connection from {}", client_address);
 
-            let (local, remote) = duplex(4096);
+            let (local, remote) = duplex(MAX_UDP_PACKET_SIZE + STREAMED_UDP_PACKET_HEADER_SIZE);
             let (remote_reader, remote_writer) = split(remote);
             new_clients
                 .send(Stream::new(remote_reader, remote_writer))

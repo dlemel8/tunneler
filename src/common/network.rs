@@ -43,7 +43,7 @@ impl Listener for TcpListener {
 }
 
 pub const MAX_UDP_PACKET_SIZE: usize = u16::MAX as usize;
-const STREAMED_UDP_PACKET_HEADER_SIZE: usize = 2;
+pub const STREAMED_UDP_PACKET_HEADER_SIZE: usize = 2;
 
 pub async fn stream_udp_packet(
     payload: &mut Vec<u8>,
@@ -83,7 +83,7 @@ pub async fn unstream_udp(
     socket: Arc<UdpSocket>,
     target: SocketAddr,
 ) {
-    while let Some(data) = read_streamed_data(&mut reader).await {
+    while let Some(data) = unstream_udp_packet(&mut reader).await {
         log::debug!("sending to {} received data {:?}", target, data);
         if let Err(e) = socket.send_to(&data, &target).await {
             log::error!("failed to sending  data to {}: {}", target, e);
@@ -91,7 +91,7 @@ pub async fn unstream_udp(
     }
 }
 
-async fn read_streamed_data(reader: &mut Box<dyn AsyncReader>) -> Option<Vec<u8>> {
+async fn unstream_udp_packet(reader: &mut Box<dyn AsyncReader>) -> Option<Vec<u8>> {
     let mut header_bytes = [0; STREAMED_UDP_PACKET_HEADER_SIZE];
     let header_size = match reader.read_exact(&mut header_bytes).await {
         Ok(size) => size,

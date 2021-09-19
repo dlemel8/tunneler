@@ -1,8 +1,9 @@
 import asyncio
 from asyncio import StreamReader, StreamWriter
+from copy import copy
 from enum import Enum
 from os import getenv
-from typing import Union, Dict, Any, Optional
+from typing import Union, Dict, Any, Optional, List
 
 import aioredis
 import pytest
@@ -70,6 +71,30 @@ async def redis_server():
     container.remove(force=True)
 
 
+class EchoUdpServerProtocol(asyncio.DatagramProtocol):
+    def __init__(self):
+        self._transport = None
+
+    def connection_made(self, transport):
+        self._transport = transport
+
+    def datagram_received(self, data, addr):
+        message = data.decode()
+        print(f'received {message} from {addr}')
+        self._transport.sendto(data, addr)
+        print(f'sent {message} to {addr}')
+
+
+@pytest.fixture
+async def udp_echo_server():
+    loop = asyncio.get_running_loop()
+    transport, protocol = await loop.create_datagram_endpoint(lambda: EchoUdpServerProtocol(),
+                                                              local_addr=('127.0.0.1', TestPorts.BACKEND_PORT.value))
+    print(f'serving {protocol} backend on {TestPorts.BACKEND_PORT.value}')
+    yield transport
+    transport.close()
+
+
 def build_tunneler_image(executable: str, image_name: str) -> Image:
     cache_from_registry = getenv('CACHE_FROM_REGISTRY')
     cache_from = f'type=registry,ref={cache_from_registry}' if cache_from_registry else None
@@ -95,7 +120,7 @@ def run_tunneler_container(image: Image,
     elif isinstance(local_port, int):
         local_port_value = local_port
     else:
-        raise ValueError(f'unsupported local port type %s', type(local_port))
+        raise ValueError(f'unsupported local port type {type(local_port)}')
 
     extra_env_vars = extra_env_vars or {}
 
@@ -138,7 +163,22 @@ def tcp_over_dns_server(server_image: Image) -> Container:
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
-                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300000,
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300_000,
+                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+    yield container
+    print_log_and_delete_container(container)
+
+
+@pytest.fixture
+def udp_over_dns_server(server_image: Image) -> Container:
+    container = run_tunneler_container(server_image,
+                                       'test_server',
+                                       TunnelerType.DNS,
+                                       TunneledType.UDP,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       TestPorts.BACKEND_PORT,
+                                       extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300_000,
                                                        'CLIENT_SUFFIX': DNS_SUFFIX})
     yield container
     print_log_and_delete_container(container)
@@ -150,6 +190,18 @@ def tcp_over_tcp_server(server_image: Image) -> Container:
                                        'test_server',
                                        TunnelerType.TCP,
                                        TunneledType.TCP,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       TestPorts.BACKEND_PORT)
+    yield container
+    print_log_and_delete_container(container)
+
+
+@pytest.fixture
+def udp_over_tcp_server(server_image: Image) -> Container:
+    container = run_tunneler_container(server_image,
+                                       'test_server',
+                                       TunnelerType.TCP,
+                                       TunneledType.UDP,
                                        TestPorts.UNTUNNELER_PORT,
                                        TestPorts.BACKEND_PORT)
     yield container
@@ -179,11 +231,38 @@ def tcp_over_dns_client(client_image: Image) -> Container:
 
 
 @pytest.fixture
+def udp_over_dns_client(client_image: Image) -> Container:
+    container = run_tunneler_container(client_image,
+                                       'test_client',
+                                       TunnelerType.DNS,
+                                       TunneledType.UDP,
+                                       TestPorts.TUNNELER_PORT,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
+                                                       'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000,
+                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+    yield container
+    print_log_and_delete_container(container)
+
+
+@pytest.fixture
 def tcp_over_tcp_client(client_image: Image) -> Container:
     container = run_tunneler_container(client_image,
                                        'test_client',
                                        TunnelerType.TCP,
                                        TunneledType.TCP,
+                                       TestPorts.TUNNELER_PORT,
+                                       TestPorts.UNTUNNELER_PORT)
+    yield container
+    print_log_and_delete_container(container)
+
+
+@pytest.fixture
+def udp_over_tcp_client(client_image: Image) -> Container:
+    container = run_tunneler_container(client_image,
+                                       'test_client',
+                                       TunnelerType.TCP,
+                                       TunneledType.UDP,
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT)
     yield container
@@ -302,3 +381,78 @@ async def run_test_tcp_server_long_response_and_empty_acks() -> None:
     redis = aioredis.from_url(f'redis://127.0.0.1:{TestPorts.TUNNELER_PORT.value}/0')
     result = await redis.info()
     assert result
+
+
+class EchoClientProtocol(asyncio.DatagramProtocol):
+    def __init__(self, messages_to_send: List[str], communication_done: asyncio.Future):
+        self._messages_to_send = copy(messages_to_send)
+        self._communication_done = communication_done
+        self._transport = None
+        self._received_messages = []
+
+    def connection_made(self, transport):
+        self._transport = transport
+        self._send_message()
+
+    def datagram_received(self, data, addr):
+        received_message = data.decode()
+        print(f'received {received_message} from {addr}')
+        self._received_messages.append(received_message)
+
+        if self._messages_to_send:
+            self._send_message()
+        else:
+            self._communication_done.set_result(self._received_messages)
+
+    def _send_message(self):
+        message_to_send = self._messages_to_send.pop(0)
+        self._transport.sendto(message_to_send.encode())
+        print(f'sent {message_to_send}')
+
+
+async def run_test_udp_single_client_single_short_echo() -> None:
+    message_to_send = 'bla'
+
+    loop = asyncio.get_running_loop()
+    communication_done = loop.create_future()
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: EchoClientProtocol([message_to_send], communication_done),
+        remote_addr=('127.0.0.1', TestPorts.TUNNELER_PORT.value))
+
+    try:
+        received_message = (await communication_done).pop()
+        assert received_message == message_to_send
+    finally:
+        transport.close()
+
+
+async def run_test_udp_single_client_multiple_short_echo() -> None:
+    messages_to_send = ['bla', 'bli', 'blu']
+
+    loop = asyncio.get_running_loop()
+    communication_done = loop.create_future()
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: EchoClientProtocol(messages_to_send, communication_done),
+        remote_addr=('127.0.0.1', TestPorts.TUNNELER_PORT.value))
+
+    try:
+        received_messages = await communication_done
+        assert received_messages == messages_to_send
+    finally:
+        transport.close()
+
+
+async def run_test_udp_single_client_single_long_echo(payload_ratio: int) -> None:
+    message_to_send = 'bla' * payload_ratio
+
+    loop = asyncio.get_running_loop()
+    communication_done = loop.create_future()
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: EchoClientProtocol([message_to_send], communication_done),
+        remote_addr=('127.0.0.1', TestPorts.TUNNELER_PORT.value))
+
+    try:
+        received_message = (await communication_done).pop()
+        assert received_message == message_to_send
+    finally:
+        transport.close()
