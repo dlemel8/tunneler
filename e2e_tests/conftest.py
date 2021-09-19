@@ -415,7 +415,7 @@ async def run_test_udp_single_client_single_short_echo() -> None:
 
     loop = asyncio.get_running_loop()
     communication_done = loop.create_future()
-    transport, protocol = await loop.create_datagram_endpoint(
+    transport, _ = await loop.create_datagram_endpoint(
         lambda: EchoClientProtocol([message_to_send], communication_done),
         remote_addr=('127.0.0.1', TestPorts.TUNNELER_PORT.value))
 
@@ -431,7 +431,7 @@ async def run_test_udp_single_client_multiple_short_echo() -> None:
 
     loop = asyncio.get_running_loop()
     communication_done = loop.create_future()
-    transport, protocol = await loop.create_datagram_endpoint(
+    transport, _ = await loop.create_datagram_endpoint(
         lambda: EchoClientProtocol(messages_to_send, communication_done),
         remote_addr=('127.0.0.1', TestPorts.TUNNELER_PORT.value))
 
@@ -447,7 +447,7 @@ async def run_test_udp_single_client_single_long_echo(payload_ratio: int) -> Non
 
     loop = asyncio.get_running_loop()
     communication_done = loop.create_future()
-    transport, protocol = await loop.create_datagram_endpoint(
+    transport, _ = await loop.create_datagram_endpoint(
         lambda: EchoClientProtocol([message_to_send], communication_done),
         remote_addr=('127.0.0.1', TestPorts.TUNNELER_PORT.value))
 
@@ -456,3 +456,28 @@ async def run_test_udp_single_client_single_long_echo(payload_ratio: int) -> Non
         assert received_message == message_to_send
     finally:
         transport.close()
+
+
+async def run_test_udp_multiple_tunnels_single_short_echo(another_client_container: Container) -> None:
+    try:
+        message_to_send = 'bla'
+        loop = asyncio.get_running_loop()
+
+        communication_dones, transports = [], []
+        try:
+            for i in range(2):
+                communication_done = loop.create_future()
+                transport, _ = await loop.create_datagram_endpoint(
+                    lambda: EchoClientProtocol([message_to_send], communication_done),
+                    remote_addr=('127.0.0.1', TestPorts.TUNNELER_PORT.value + i))
+                communication_dones.append(communication_done)
+                transports.append(transport)
+
+            for communication_done in communication_dones:
+                received_message = (await communication_done).pop()
+                assert received_message == message_to_send
+        finally:
+            for transport in transports:
+                transport.close()
+    finally:
+        print_log_and_delete_container(another_client_container)
