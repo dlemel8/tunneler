@@ -1,10 +1,12 @@
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use tokio::net::{TcpStream, UdpSocket};
 
-use common::io::{copy, AsyncWriter, Stream};
-use common::network::{stream_udp_packet, unstream_udp, MAX_UDP_PACKET_SIZE};
+use common::io::{copy, AsyncReader, AsyncWriter, Stream};
+use common::network::{
+    stream_udp_packet, unstream_udp_packet, UnstreamPacketResult, MAX_UDP_PACKET_SIZE,
+};
 
 pub(crate) async fn forward_client_tcp(
     mut client: Stream,
@@ -65,5 +67,18 @@ async fn stream_udp(mut writer: Box<dyn AsyncWriter>, socket: Arc<UdpSocket>) {
     let mut data = vec![0; MAX_UDP_PACKET_SIZE];
     while let Ok(size) = socket.recv(&mut data).await {
         stream_udp_packet(&mut data, size, &mut writer).await;
+    }
+}
+
+async fn unstream_udp(
+    mut reader: Box<dyn AsyncReader>,
+    socket: Arc<UdpSocket>,
+    target: SocketAddr,
+) {
+    while let UnstreamPacketResult::Payload(data) = unstream_udp_packet(&mut reader, None).await {
+        log::debug!("sending to {} received data {:?}", target, data);
+        if let Err(e) = socket.send_to(&data, &target).await {
+            log::error!("failed to sending  data to {}: {}", target, e);
+        };
     }
 }

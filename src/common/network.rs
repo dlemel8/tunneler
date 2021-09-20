@@ -1,12 +1,11 @@
 use std::convert::TryFrom;
 use std::error::Error;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::net::IpAddr;
 
 use async_channel::Sender;
 use async_trait::async_trait;
 use tokio::net;
-use tokio::net::UdpSocket;
+use tokio::time::{timeout as tokio_timeout, Duration};
 
 use crate::io::{AsyncReader, AsyncWriter, Stream};
 
@@ -78,32 +77,37 @@ pub async fn stream_udp_packet(
     };
 }
 
-pub async fn unstream_udp(
-    mut reader: Box<dyn AsyncReader>,
-    socket: Arc<UdpSocket>,
-    target: SocketAddr,
-) {
-    while let Some(data) = unstream_udp_packet(&mut reader).await {
-        log::debug!("sending to {} received data {:?}", target, data);
-        if let Err(e) = socket.send_to(&data, &target).await {
-            log::error!("failed to sending  data to {}: {}", target, e);
-        };
-    }
+pub enum UnstreamPacketResult {
+    Error,
+    Timeout,
+    Payload(Vec<u8>),
 }
 
-async fn unstream_udp_packet(reader: &mut Box<dyn AsyncReader>) -> Option<Vec<u8>> {
+pub async fn unstream_udp_packet(
+    reader: &mut Box<dyn AsyncReader>,
+    timeout: Option<Duration>,
+) -> UnstreamPacketResult {
     let mut header_bytes = [0; STREAMED_UDP_PACKET_HEADER_SIZE];
-    let header_size = match reader.read_exact(&mut header_bytes).await {
+    let read_header_future = reader.read_exact(&mut header_bytes);
+    let header_size_result = match timeout {
+        None => read_header_future.await,
+        Some(duration) => match tokio_timeout(duration, read_header_future).await {
+            Ok(size_result) => size_result,
+            Err(_) => return UnstreamPacketResult::Timeout,
+        },
+    };
+
+    let header_size = match header_size_result {
         Ok(size) => size,
         Err(e) => {
             log::error!("failed to read header: {}", e);
-            return None;
+            return UnstreamPacketResult::Error;
         }
     };
 
     if header_size != STREAMED_UDP_PACKET_HEADER_SIZE {
         log::error!("got unexpected header size in bytes {}", header_size);
-        return None;
+        return UnstreamPacketResult::Error;
     }
 
     let header = u16::from_be_bytes(header_bytes);
@@ -113,14 +117,14 @@ async fn unstream_udp_packet(reader: &mut Box<dyn AsyncReader>) -> Option<Vec<u8
         Ok(size) => size,
         Err(e) => {
             log::error!("failed to read payload: {}", e);
-            return None;
+            return UnstreamPacketResult::Error;
         }
     };
 
     if size != header_usize {
         log::error!("got unexpected data size in bytes {}", header_size);
-        return None;
+        return UnstreamPacketResult::Error;
     }
 
-    Some(payload)
+    UnstreamPacketResult::Payload(payload)
 }

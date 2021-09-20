@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::{Duration, Instant};
 
-use common::io::Stream;
+use crate::io::Stream;
 
 pub trait CacheKey: Eq + Hash + Debug {}
 impl<T: Eq + Hash + Debug> CacheKey for T {}
@@ -21,7 +21,7 @@ struct CacheEntry {
     last_activity: Instant,
 }
 
-pub(crate) struct StreamsCache<F: StreamCreator, K: CacheKey> {
+pub struct StreamsCache<F: StreamCreator, K: CacheKey> {
     new_stream_creator: F,
     entries: Mutex<HashMap<K, CacheEntry>>,
     idle_entry_timeout: Duration,
@@ -30,7 +30,7 @@ pub(crate) struct StreamsCache<F: StreamCreator, K: CacheKey> {
 }
 
 impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
-    pub(crate) fn new(
+    pub fn new(
         new_stream_creator: F,
         idle_entry_timeout: Duration,
         cleanup_interval: Duration,
@@ -44,11 +44,7 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
         }
     }
 
-    pub(crate) fn get(
-        &self,
-        key: K,
-        now: Instant,
-    ) -> Result<Arc<AsyncMutex<Stream>>, Box<dyn Error>> {
+    pub fn get(&self, key: K, now: Instant) -> Result<Arc<AsyncMutex<Stream>>, Box<dyn Error>> {
         let res = self.get_or_create_stream(key, now);
         let mut last_cleanup = self.last_cleanup.lock().unwrap();
         if now - *last_cleanup > self.cleanup_interval {
@@ -85,9 +81,10 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::time::Duration;
     use tokio_test::io::Builder;
+
+    use super::*;
 
     #[test]
     fn stream_cache_get_new_stream_creator_failed() -> Result<(), Box<dyn Error>> {

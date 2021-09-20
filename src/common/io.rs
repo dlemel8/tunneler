@@ -9,12 +9,12 @@ pub trait AsyncReader: Send {
     async fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> io::Result<usize>;
 }
 
-pub struct AsyncReadWrapper<R: AsyncReadExt + Unpin> {
+struct AsyncReadWrapper<R: AsyncReadExt + Unpin> {
     reader: R,
 }
 
 impl<R: AsyncReadExt + Unpin> AsyncReadWrapper<R> {
-    pub fn new(reader: R) -> Self {
+    fn new(reader: R) -> Self {
         Self { reader }
     }
 }
@@ -42,12 +42,12 @@ pub trait AsyncWriter: Send {
     async fn shutdown(&mut self) -> io::Result<()>;
 }
 
-pub struct AsyncWriteWrapper<W: AsyncWriteExt + Unpin> {
+struct AsyncWriteWrapper<W: AsyncWriteExt + Unpin> {
     writer: W,
 }
 
 impl<W: AsyncWriteExt + Unpin> AsyncWriteWrapper<W> {
-    pub fn new(writer: W) -> Self {
+    fn new(writer: W) -> Self {
         Self { writer }
     }
 }

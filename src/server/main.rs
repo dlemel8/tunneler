@@ -15,7 +15,6 @@ use crate::network::{forward_client_tcp, forward_client_udp};
 use crate::tunnel::{TcpUntunneler, Untunneler};
 
 mod dns;
-mod io;
 mod network;
 mod tunnel;
 

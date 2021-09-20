@@ -13,8 +13,7 @@ use async_trait::async_trait;
 use mockall::automock;
 use tokio::io::{duplex, split};
 use tokio::net::UdpSocket;
-use tokio::time::timeout;
-use tokio::time::{Duration, Instant};
+use tokio::time::{timeout, Duration, Instant};
 use trust_dns_client::op::{Header, MessageType, OpCode};
 use trust_dns_client::proto::rr::rdata::TXT;
 use trust_dns_client::proto::rr::{Name, RData, Record, RecordType};
@@ -22,13 +21,13 @@ use trust_dns_server::authority::{MessageRequest, MessageResponse, MessageRespon
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler};
 use trust_dns_server::ServerFuture;
 
+use common::cache::{StreamCreator, StreamsCache};
 use common::dns::{
     AppendSuffixDecoder, ClientId, ClientIdSuffixDecoder, Decoder, Encoder, HexDecoder, HexEncoder,
     CLIENT_ID_SIZE_IN_BYTES,
 };
 use common::io::Stream;
 
-use crate::io::{StreamCreator, StreamsCache};
 use crate::tunnel::Untunneler;
 
 pub(crate) struct DnsUntunneler {
