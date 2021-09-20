@@ -13,6 +13,7 @@ services:
       LOCAL_PORT: 53
       REMOTE_PORT: 6379
       REMOTE_ADDRESS: redis
+      TUNNELED_TYPE: tcp
       READ_TIMEOUT_IN_MILLISECONDS: 100
       IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS: 300000
     command: "dns"

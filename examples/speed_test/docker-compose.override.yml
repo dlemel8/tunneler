@@ -2,4 +2,5 @@ version: "2.4"
 services:
   speed-test:
     ports:
-      - "45201:5201"
+      - "45201:5201/tcp"
+      - "45201:5201/udp"

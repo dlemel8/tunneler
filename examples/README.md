@@ -1,6 +1,10 @@
 # Server Deployment Examples
 All examples are written in Docker compose. You can run each example locally or deploy it using Terraform and Ansible.
 
+See additional variables and more usage examples in each example directory:
+* [speed_test](speed_test/README.md)
+* [authoritative_dns](authoritative_dns/README.md)
+
 ## Run Locally
 ### Server
 Open a shell on the example directory and run:
@@ -8,22 +12,23 @@ Open a shell on the example directory and run:
 docker-compose up
 ```
 ### Client
-Run Tunneler client with the example local port. for example, for Authoritative DNS run:
+Run Tunneler client with the example local port. for example, for Speed Test run:
 ```sh
 LOCAL_PORT=8888 \
-REMOTE_PORT=5333 \
+REMOTE_PORT=53535 \
 REMOTE_ADDRESS=127.0.0.1 \
+TUNNELED_TYPE=tcp \
+LOG_LEVEL=debug \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-LOG_LEVEL=debug \
 ../../target/debug/client dns
 ```
-Then, run the service client. for example, for Authoritative DNS run:
+Then, run the service client. for example, for Speed Test run:
 ```sh
-docker run --net=host --rm -it redis:6.0.12-alpine redis-cli -p 8888 info
+iperf3 -c 127.0.0.1 -p 8888
 ```
 
-## Deploy Server
+## Production Server
 ### Server
 Server machine is deployed using Terraform. I selected Linode as my provider. After Linode instance is created, its 
 public IP is written to Ansible inventory and the example prod Docker compose files using Terraform templates.
@@ -58,10 +63,11 @@ Run Tunneler client. for example, for Authoritative DNS run (using Cloudflare DN
 LOCAL_PORT=8888 \
 REMOTE_PORT=53 \
 REMOTE_ADDRESS=1.1.1.1 \
-CLIENT_SUFFIX=.dlemel8.xyz
+TUNNELED_TYPE=tcp \
+CLIENT_SUFFIX=.dlemel8.xyz \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-../../target/debug/client dns
+../target/debug/client dns
 ```
 Then, run the service client. for example, for Authoritative DNS run:
 ```sh
