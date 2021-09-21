@@ -66,7 +66,7 @@ impl Listener for UdpListener {
     }
 }
 
-async fn stream_udp(data: &Vec<u8>, size: usize, client: &Arc<Mutex<Stream>>) {
+async fn stream_udp(data: &[u8], size: usize, client: &Arc<Mutex<Stream>>) {
     let writer = &mut client.lock().await.writer;
     stream_udp_packet(&data, size, writer).await;
 }

@@ -44,7 +44,7 @@ impl Listener for TcpListener {
 pub const MAX_UDP_PACKET_SIZE: usize = u16::MAX as usize;
 pub const STREAMED_UDP_PACKET_HEADER_SIZE: usize = 2;
 
-pub async fn stream_udp_packet(payload: &Vec<u8>, size: usize, writer: &mut Box<dyn AsyncWriter>) {
+pub async fn stream_udp_packet(payload: &[u8], size: usize, writer: &mut Box<dyn AsyncWriter>) {
     if payload.len() < size {
         log::error!(
             "payload {:?} is too small (expecting size {})",
