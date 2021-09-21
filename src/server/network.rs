@@ -66,7 +66,7 @@ pub(crate) async fn forward_client_udp(client: Stream, remote_address: IpAddr, r
 async fn stream_udp(mut writer: Box<dyn AsyncWriter>, socket: Arc<UdpSocket>) {
     let mut data = vec![0; MAX_UDP_PACKET_SIZE];
     while let Ok(size) = socket.recv(&mut data).await {
-        stream_udp_packet(&mut data, size, &mut writer).await;
+        stream_udp_packet(&data, size, &mut writer).await;
     }
 }
 

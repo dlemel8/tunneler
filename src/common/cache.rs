@@ -21,6 +21,8 @@ struct CacheEntry {
     last_activity: Instant,
 }
 
+const DEFAULT_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
+
 pub struct StreamsCache<F: StreamCreator, K: CacheKey> {
     new_stream_creator: F,
     entries: Mutex<HashMap<K, CacheEntry>>,
@@ -42,6 +44,17 @@ impl<F: StreamCreator, K: CacheKey> StreamsCache<F, K> {
             cleanup_interval,
             last_cleanup: Mutex::new(Instant::now()),
         }
+    }
+
+    pub fn with_default_cleanup_duration(
+        new_stream_creator: F,
+        idle_entry_timeout: Duration,
+    ) -> Self {
+        StreamsCache::new(
+            new_stream_creator,
+            idle_entry_timeout,
+            DEFAULT_CLEANUP_INTERVAL,
+        )
     }
 
     pub fn get(&self, key: K, now: Instant) -> Result<Arc<AsyncMutex<Stream>>, Box<dyn Error>> {

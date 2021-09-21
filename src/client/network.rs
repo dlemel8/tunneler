@@ -37,7 +37,7 @@ impl UdpListener {
 #[async_trait]
 impl Listener for UdpListener {
     async fn accept_clients(&mut self, new_clients: Sender<Stream>) -> Result<(), Box<dyn Error>> {
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             move || {
                 let (local, remote) = duplex(MAX_UDP_PACKET_SIZE + STREAMED_UDP_PACKET_HEADER_SIZE);
 
@@ -48,7 +48,6 @@ impl Listener for UdpListener {
                 Ok(Stream::new(local_reader, local_writer))
             },
             CLIENT_IDLE_TIMEOUT,
-            Duration::from_secs(60),
         );
 
         let mut data = vec![0; MAX_UDP_PACKET_SIZE];
@@ -56,7 +55,7 @@ impl Listener for UdpListener {
             log::debug!("got connection from {}", client_address);
 
             let client = cache.get(client_address, Instant::now())?;
-            stream_udp(&mut data, size, &client).await;
+            stream_udp(&data, size, &client).await;
             tokio::spawn(unstream_udp(
                 client.clone(),
                 self.socket.clone(),
@@ -67,9 +66,9 @@ impl Listener for UdpListener {
     }
 }
 
-async fn stream_udp(mut data: &mut Vec<u8>, size: usize, client: &Arc<Mutex<Stream>>) {
+async fn stream_udp(data: &Vec<u8>, size: usize, client: &Arc<Mutex<Stream>>) {
     let writer = &mut client.lock().await.writer;
-    stream_udp_packet(&mut data, size, writer).await;
+    stream_udp_packet(&data, size, writer).await;
 }
 
 async fn unstream_udp(client: Arc<Mutex<Stream>>, socket: Arc<net::UdpSocket>, target: SocketAddr) {

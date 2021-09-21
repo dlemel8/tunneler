@@ -58,7 +58,7 @@ impl DnsUntunneler {
 #[async_trait(? Send)]
 impl Untunneler for DnsUntunneler {
     async fn untunnel(&mut self, new_clients: Sender<Stream>) -> Result<(), Box<dyn Error>> {
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             move || {
                 let (local, remote) = duplex(4096);
 
@@ -69,7 +69,6 @@ impl Untunneler for DnsUntunneler {
                 Ok(Stream::new(local_reader, local_writer))
             },
             self.idle_client_timeout,
-            Duration::from_secs(60),
         );
 
         let udp_socket = UdpSocket::bind(self.listener_address).await?;
@@ -352,10 +351,9 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || Ok(Stream::new(Builder::new().build(), Builder::new().build())),
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let decoder_mock = MockDecoder::new();
         let encoder_mock = MockEncoder::new();
@@ -387,10 +385,9 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || Ok(Stream::new(Builder::new().build(), Builder::new().build())),
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let decoder_mock = MockDecoder::new();
         let encoder_mock = MockEncoder::new();
@@ -420,10 +417,9 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || Ok(Stream::new(Builder::new().build(), Builder::new().build())),
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let decoder_mock = MockDecoder::new();
         let encoder_mock = MockEncoder::new();
@@ -455,10 +451,9 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || Ok(Stream::new(Builder::new().build(), Builder::new().build())),
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -493,10 +488,9 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || Ok(Stream::new(Builder::new().build(), Builder::new().build())),
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -534,10 +528,9 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || Err(String::from("bla").into()),
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -575,7 +568,7 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || {
                 Ok(Stream::new(
                     Builder::new().build(),
@@ -585,7 +578,6 @@ mod tests {
                 ))
             },
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -623,7 +615,7 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || {
                 Ok(Stream::new(
                     Builder::new()
@@ -633,7 +625,6 @@ mod tests {
                 ))
             },
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -671,7 +662,7 @@ mod tests {
         };
 
         let handler_mock = MockDnsResponseHandler::new();
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || {
                 Ok(Stream::new(
                     Builder::new().read(b"bli").build(),
@@ -679,7 +670,6 @@ mod tests {
                 ))
             },
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -723,7 +713,7 @@ mod tests {
         handler_mock
             .expect_send_response()
             .returning(|_| Err(io::Error::new(ErrorKind::Other, "oh no!")));
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || {
                 Ok(Stream::new(
                     Builder::new().read(b"bli").build(),
@@ -731,7 +721,6 @@ mod tests {
                 ))
             },
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
@@ -773,7 +762,7 @@ mod tests {
 
         let mut handler_mock = MockDnsResponseHandler::new();
         handler_mock.expect_send_response().returning(|_| Ok(()));
-        let cache = StreamsCache::new(
+        let cache = StreamsCache::with_default_cleanup_duration(
             || {
                 Ok(Stream::new(
                     Builder::new().read(b"bli").build(),
@@ -781,7 +770,6 @@ mod tests {
                 ))
             },
             Duration::from_secs(3 * 60),
-            Duration::from_secs(60),
         );
         let mut decoder_mock = MockDecoder::new();
         decoder_mock
