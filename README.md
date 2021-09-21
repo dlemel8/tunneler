@@ -1,9 +1,9 @@
 # Tunneler
-This repo contains client and server that allow you to tunnel TCP traffic via other network protocols.
+This repo contains client and server that allow you to tunnel TCP and UDP traffic over other network protocols.
 
 Currently, supported tunnels are:
-* DNS tunneling (authoritative DNS server or direct connection)
-* TCP proxy
+* DNS (authoritative DNS server or direct connection)
+* TCP
 
 Main tool is writen in Rust and end-to-end tests are written in Python.
 
@@ -26,14 +26,16 @@ There is also a [docker file](Dockerfile) if you prefer to build a local docker 
 docker run -e LOCAL_PORT=45301 \
            -e REMOTE_PORT=5201 \
            -e REMOTE_ADDRESS=localhost \
+           -e TUNNELED_TYPE=udp \
            --rm -p 45301:45301 ghcr.io/dlemel8/tunneler-server:latest tcp
 ```
 ### Option 2: locally compiled binary
 ```sh
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
+TUNNELED_TYPE=tcp \
 LOG_LEVEL=debug \
-./target/debug/client 127.0.0.1 53 dns
+./target/debug/client 1.1.1.1 53 dns
 ```
 Run docker image or compiled binary with `--help` for more information
 
@@ -47,13 +49,28 @@ You can run each example locally or deploy it using Terraform and Ansible. See m
 
 ## Architecture
 ![Architecture](images/architecture.jpg?raw=true "Architecture")
+Each executable contains 2 components communicating via a channel of client streams (a tuple of bytes reader and writer):
+* Client Listener binds a socket and convert incoming and outgoing traffic to a new stream.
+* Client Tunneler translate stream reader and writer to the tunnel protocol.
+* Server Untunneler binds a socket according to tunnel protocol and translate tunneled traffic back to original stream.
+* Server Forwarder converts stream writer and reader back to traffic. 
+
+TCP based traffic is trivially converted to stream. UDP based traffic conversion depends on the tunnel protocol. 
+
+UDP based traffic also need a way to identify existing clients to continue their sessions. The solution is an in-memory 
+Clients Cache that maps an identifier of the client to its stream.
 
 ## Protocols
+### Tunneled UDP
+In order to convert UDP traffic to a stream, a 2 bytes size header (in big endian) precedes each packet payload.
+
+UDP Listener uses incoming packet peer address as a key to its Clients Cache. 
+
 ### DNS tunneling
 We have a few challenges here:
-* DNS Untunneler translates UDP packets to TCP, so we need a way to identify existing clients to continue their sessions.
 * DNS payload must be alphanumeric.
 * Every message requires a response before we can send next message.
+* Each DNS query uses randomized source port and transaction ID, so we can't use them as Client Cache key.
 
 To solve those challenges, each client session starts with generating a random Client ID. Client reads data to tunnel 
 and run it via a pipeline of encoders: 
@@ -68,16 +85,11 @@ IP from your domain name registrar and forward the request to your IP. Another o
 traffic analyzer) is configuring client to send the request directly to your IP (on port UDP/53 or any other port server 
 is listening to).
 
-Server decodes data (ignoring any non client traffic) and get or create Client ID in an in-memory Clients Cache. Clients Cache maps Client ID 
-into in-memory reader and writer. Original data is then forwarded using TCP to target service.
+Server decodes data (ignoring any non client traffic) and uses Client ID as a key to its Clients Cache.
 
 In order to handle large server responses and empty TCP ACKs, read timeout is used in both client and server. If read 
 timeout is expired, empty message will be sent. Both client and server use idle timeout to stop forwarding and cleanup 
 local resources.
-
-### TCP proxy
-Currently, only TCP listener and forwarder are supported, so nothing is special here.
-
 
 ## Testing
 ### Run Unit Tests
