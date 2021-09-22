@@ -28,7 +28,7 @@ Then, run the service client. for example, for Speed Test run:
 iperf3 -c 127.0.0.1 -p 8888
 ```
 
-## Production Server
+## Deploy Server
 ### Server
 Server machine is deployed using Terraform. I selected Linode as my provider. After Linode instance is created, its 
 public IP is written to Ansible inventory and the example prod Docker compose files using Terraform templates.
