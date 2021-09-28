@@ -13,10 +13,12 @@ use common::network::{Listener, TcpListener};
 
 use crate::dns::DnsTunneler;
 use crate::network::UdpListener;
+use crate::tls::TlsTunneler;
 use crate::tunnel::{TcpTunneler, Tunneler};
 
 mod dns;
 mod network;
+mod tls;
 mod tunnel;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -80,6 +82,16 @@ async fn new_tunneler(
                 Duration::from_millis(*read_timeout_in_milliseconds),
                 Duration::from_millis(*idle_client_timeout_in_milliseconds),
                 client_suffix.clone(),
+            )
+            .await?,
+        )),
+        TunnelerType::Tls { ca_cert, cert, key } => Ok(Box::new(
+            TlsTunneler::new(
+                address,
+                port,
+                ca_cert.to_path_buf(),
+                cert.to_path_buf(),
+                key.to_path_buf(),
             )
             .await?,
         )),

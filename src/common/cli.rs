@@ -2,6 +2,7 @@ use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
 
+use std::path::PathBuf;
 use structopt::{clap::arg_enum, StructOpt};
 use trust_dns_resolver::Resolver;
 
@@ -15,6 +16,14 @@ pub enum TunnelerType {
         idle_client_timeout_in_milliseconds: u64,
         #[structopt(default_value = "", env)]
         client_suffix: String,
+    },
+    Tls {
+        #[structopt(env)]
+        ca_cert: PathBuf,
+        #[structopt(env)]
+        cert: PathBuf,
+        #[structopt(env)]
+        key: PathBuf,
     },
 }
 

@@ -12,10 +12,12 @@ use common::io::Stream;
 
 use crate::dns::DnsUntunneler;
 use crate::network::{forward_client_tcp, forward_client_udp};
+use crate::tls::TlsUntunneler;
 use crate::tunnel::{TcpUntunneler, Untunneler};
 
 mod dns;
 mod network;
+mod tls;
 mod tunnel;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -69,6 +71,9 @@ async fn new_untunneler(
                 client_suffix,
             )
             .await?,
+        )),
+        TunnelerType::Tls { ca_cert, cert, key } => Ok(Box::new(
+            TlsUntunneler::new(address, port, ca_cert, cert, key).await?,
         )),
     }
 }

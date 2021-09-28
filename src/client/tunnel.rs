@@ -21,9 +21,11 @@ impl TcpTunneler {
         log::debug!("connecting to {}", to_address);
         let stream = TcpStream::connect(to_address).await?;
         let (reader, writer) = stream.into_split();
-        Ok(Self {
-            tunneled: Stream::new(reader, writer),
-        })
+        TcpTunneler::from_stream(Stream::new(reader, writer))
+    }
+
+    pub(crate) fn from_stream(stream: Stream) -> Result<Self, Box<dyn Error>> {
+        Ok(Self { tunneled: stream })
     }
 }
 

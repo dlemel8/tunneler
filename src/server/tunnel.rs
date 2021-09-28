@@ -39,7 +39,7 @@ impl Untunneler for TcpUntunneler {
     }
 }
 
-async fn untunnel_clients(
+pub(crate) async fn untunnel_clients(
     tunneled: Receiver<Stream>,
     untunneled: Sender<Stream>,
 ) -> Result<(), Box<dyn Error>> {
