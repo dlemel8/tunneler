@@ -26,6 +26,7 @@ impl TlsTunneler {
         ca_cert: PathBuf,
         client_cert: PathBuf,
         client_key: PathBuf,
+        server_hostname: String,
     ) -> Result<Self, Box<dyn Error>> {
         let mut config = ClientConfig::new();
         config.root_store.add(&load_certificate(ca_cert).await?)?;
@@ -37,7 +38,7 @@ impl TlsTunneler {
         log::debug!("connecting to {}", to_address);
         let tcp_stream = TcpStream::connect(to_address).await?;
 
-        let domain = DNSNameRef::try_from_ascii_str("server.tunneler")?;
+        let domain = DNSNameRef::try_from_ascii_str(&server_hostname)?;
         let stream = connector.connect(domain, tcp_stream).await?;
         let (reader, writer) = split(stream);
         Ok(Self {

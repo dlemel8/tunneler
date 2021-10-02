@@ -85,13 +85,19 @@ async fn new_tunneler(
             )
             .await?,
         )),
-        TunnelerType::Tls { ca_cert, cert, key } => Ok(Box::new(
+        TunnelerType::Tls {
+            ca_cert,
+            cert,
+            key,
+            server_hostname,
+        } => Ok(Box::new(
             TlsTunneler::new(
                 address,
                 port,
                 ca_cert.to_path_buf(),
                 cert.to_path_buf(),
                 key.to_path_buf(),
+                server_hostname.clone(),
             )
             .await?,
         )),

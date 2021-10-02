@@ -24,6 +24,8 @@ pub enum TunnelerType {
         cert: PathBuf,
         #[structopt(env)]
         key: PathBuf,
+        #[structopt(env)]
+        server_hostname: String,
     },
 }
 

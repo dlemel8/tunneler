@@ -30,6 +30,7 @@ impl TlsUntunneler {
         ca_cert: PathBuf,
         server_cert: PathBuf,
         server_key: PathBuf,
+        server_hostname: String,
     ) -> Result<Self, Box<dyn Error>> {
         let mut store = RootCertStore::empty();
         store.add(&load_certificate(ca_cert).await?)?;
@@ -40,7 +41,7 @@ impl TlsUntunneler {
         let mut resolver = ResolvesServerCertUsingSNI::new();
         let signing_key = load_signing_key(server_key).await?;
         resolver.add(
-            "server.tunneler",
+            &server_hostname,
             CertifiedKey::new(chain, Arc::new(signing_key)),
         )?;
         config.cert_resolver = Arc::new(resolver);

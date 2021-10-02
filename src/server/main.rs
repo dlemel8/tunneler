@@ -72,8 +72,13 @@ async fn new_untunneler(
             )
             .await?,
         )),
-        TunnelerType::Tls { ca_cert, cert, key } => Ok(Box::new(
-            TlsUntunneler::new(address, port, ca_cert, cert, key).await?,
+        TunnelerType::Tls {
+            ca_cert,
+            cert,
+            key,
+            server_hostname,
+        } => Ok(Box::new(
+            TlsUntunneler::new(address, port, ca_cert, cert, key, server_hostname).await?,
         )),
     }
 }
