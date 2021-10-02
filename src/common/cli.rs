@@ -1,8 +1,8 @@
 use std::error::Error;
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 
-use std::path::PathBuf;
 use structopt::{clap::arg_enum, StructOpt};
 use trust_dns_resolver::Resolver;
 
@@ -72,8 +72,9 @@ pub struct Cli {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::net::{Ipv4Addr, Ipv6Addr};
+
+    use super::*;
 
     #[test]
     fn parse_or_resolve_ip_ipv4() -> Result<(), Box<dyn Error>> {

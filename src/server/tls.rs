@@ -7,17 +7,20 @@ use async_channel::Sender;
 use async_trait::async_trait;
 use tokio::io::split;
 use tokio::net::TcpListener;
-use tokio_rustls::rustls::{AllowAnyAuthenticatedClient, RootCertStore, ServerConfig};
+use tokio_rustls::rustls::sign::CertifiedKey;
+use tokio_rustls::rustls::{
+    AllowAnyAuthenticatedClient, ResolvesServerCertUsingSNI, RootCertStore, ServerConfig,
+};
 use tokio_rustls::TlsAcceptor;
 
 use common::io::Stream;
 use common::network::Listener;
+use common::tls::{load_certificate, load_signing_key};
 
-use crate::tunnel::{untunnel_clients, Untunneler};
-use common::tls::{load_certificate, load_private_key};
+use crate::tunnel::{TcpUntunneler, Untunneler};
 
 pub(crate) struct TlsUntunneler {
-    server: TlsListener,
+    untunneler: TcpUntunneler<TlsListener>,
 }
 
 impl TlsUntunneler {
@@ -34,11 +37,19 @@ impl TlsUntunneler {
 
         let mut config = ServerConfig::new(verifier);
         let chain = vec![load_certificate(server_cert).await?];
-        config.set_single_cert(chain, load_private_key(server_key).await?)?;
+        let mut resolver = ResolvesServerCertUsingSNI::new();
+        let signing_key = load_signing_key(server_key).await?;
+        resolver.add(
+            "server.tunneler",
+            CertifiedKey::new(chain, Arc::new(signing_key)),
+        )?;
+        config.cert_resolver = Arc::new(resolver);
 
         let acceptor = TlsAcceptor::from(Arc::new(config));
-        let server = TlsListener::new(local_address, local_port, acceptor).await?;
-        Ok(Self { server })
+        let listener = TlsListener::new(local_address, local_port, acceptor).await?;
+        Ok(Self {
+            untunneler: TcpUntunneler::from_listener(listener),
+        })
     }
 }
 
@@ -84,12 +95,6 @@ impl Listener for TlsListener {
 #[async_trait(?Send)]
 impl Untunneler for TlsUntunneler {
     async fn untunnel(&mut self, new_clients: Sender<Stream>) -> Result<(), Box<dyn Error>> {
-        let (tunneled_sender, tunneled_receiver) = async_channel::unbounded::<Stream>();
-        let accept_clients_future = self.server.accept_clients(tunneled_sender);
-        let untunnel_clients_future = untunnel_clients(tunneled_receiver, new_clients);
-        match tokio::try_join!(untunnel_clients_future, accept_clients_future) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }
+        self.untunneler.untunnel(new_clients).await
     }
 }
