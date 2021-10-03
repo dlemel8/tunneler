@@ -1,79 +1,153 @@
 #!/bin/bash
 
-set -xe
+TARGET_DIR_DEFAULT=./pki
 
-CA_PRIVATE_KEY_PATH=$1
-TARGET_DIR=pki
+set -e
 
-to_der () {
-    type_=$1
-    path=$2
-    openssl $type_ -in $path \
-                   -out $path.der \
-                   -outform DER
+verify_openssl() {
+  openssl version > /dev/null || (echo "ERROR: could not find an openssl executable" && exit 1)
 }
 
+print_usage() {
+  local DESCRIPTION="generate one or more of the following, using OpenSSL and a private key:
+  \t * CA certificate
+  \t * Server private key and certificate, signed by CA
+  \t * Client private key and certificate, signed by CA
+  \t generated files are in PEM format. each file has a twin in DER format, with .der prefix.
+  "
+  local USAGE="${0} [options] ca|server|client (multiple arguments supported)"
+  local OPTIONS=(
+    "-h, --help \t\t print usage and exit"
+    "-k, --private_key \t private key file (e.g. SSH RSA key) that will be used as CA key"
+    "-t, --target_dir \t generated files directory (default: ${TARGET_DIR_DEFAULT})"
+    "-x, --xtrace \t\t set xtrace flag"
+  )
 
-rm -fr $TARGET_DIR
-mkdir $TARGET_DIR
+  printf 'Description:\n \t %b\n' "${DESCRIPTION}"
+  printf 'Usage:\n \t %b\n' "${USAGE}"
+  printf 'Options:\n'
+  printf '\t %b\n' "${OPTIONS[@]}"
+}
 
-openssl req -nodes \
-            -x509 \
-            -days 3650 \
-	    -key $CA_PRIVATE_KEY_PATH \
-            -out $TARGET_DIR/ca.crt \
-            -sha256 \
-            -batch \
-            -subj "/CN=Tunneler CA" \
-            -extensions v3_ca \
-	    -config openssl.cnf
+parse_flags() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -h | --help)
+        print_usage && exit 0
+        ;;
+      -k | --private_key)
+        test -f "$2" || (echo "ERROR: please provide an existing CA private key path" && exit 1)
+        CA_PRIVATE_KEY_PATH=$2
+        shift 2
+        ;;
+      -t | --target_dir)
+        test -d "$2" || (echo "ERROR: please provide an existing target directory path" && exit 1)
+        TARGET_DIR=$2
+        shift 2
+        ;;
+      ca)
+        GENERATE_CA=true
+        shift
+        ;;
+      server)
+        GENERATE_SERVER=true
+        shift
+        ;;
+      client)
+        GENERATE_CLIENT=true
+        shift
+        ;;
+      -x | --xtrace)
+        set -x
+        shift
+        ;;
+      *)
+        echo "ERROR: unknown option ${1}" && print_usage && exit 1
+        ;;
+    esac
+  done
 
-to_der x509 $TARGET_DIR/ca.crt
+  if [[ -z ${CA_PRIVATE_KEY_PATH} ]]; then
+    echo "ERROR: CA private key path must be provided" && print_usage && exit 1
+  fi
 
-openssl req -nodes \
-            -newkey rsa:2048 \
-            -keyout $TARGET_DIR/server.key \
-            -out $TARGET_DIR/server.req \
-            -sha256 \
-            -batch \
-            -subj "/CN=Tunneler Server"
+  if [[ -z ${TARGET_DIR} ]]; then
+    TARGET_DIR=${TARGET_DIR_DEFAULT}
+  fi
+}
 
-to_der rsa $TARGET_DIR/server.key
+to_der () {
+    local TYPE=$1
+    local FILE_PATH=$2
+    openssl "${TYPE}" -in "${FILE_PATH}" \
+                      -out "${FILE_PATH}".der \
+                      -outform DER
+}
 
-openssl req -nodes \
-            -newkey rsa:2048 \
-            -keyout $TARGET_DIR/client.key \
-            -out $TARGET_DIR/client.req \
-            -sha256 \
-            -batch \
-            -subj "/CN=Tunneler Client"
+verify_openssl
+parse_flags "$@"
 
-to_der rsa $TARGET_DIR/client.key
+if [[ -n ${GENERATE_CA} ]]; then
+  openssl req -nodes \
+              -x509 \
+              -days 3650 \
+              -key "$CA_PRIVATE_KEY_PATH" \
+              -out $TARGET_DIR/ca.crt \
+              -sha256 \
+              -batch \
+              -subj "/CN=Tunneler CA" \
+              -extensions v3_ca \
+              -config openssl.cnf
 
-openssl x509 -req \
-             -in $TARGET_DIR/server.req \
-             -out $TARGET_DIR/server.crt \
-             -CA $TARGET_DIR/ca.crt \
-             -CAkey $CA_PRIVATE_KEY_PATH \
-             -sha256 \
-             -days 365 \
-             -set_serial 1 \
-             -extensions v3_server \
-	     -extfile openssl.cnf
+  to_der x509 $TARGET_DIR/ca.crt
+fi
 
+if [[ -n ${GENERATE_SERVER} ]]; then
+  openssl req -nodes \
+              -newkey rsa:2048 \
+              -keyout $TARGET_DIR/server.key \
+              -out $TARGET_DIR/server.req \
+              -sha256 \
+              -batch \
+              -subj "/CN=Tunneler Server"
 
-to_der x509 $TARGET_DIR/server.crt
+  to_der rsa $TARGET_DIR/server.key
 
-openssl x509 -req \
-             -in $TARGET_DIR/client.req \
-             -out $TARGET_DIR/client.crt \
-             -CA $TARGET_DIR/ca.crt \
-             -CAkey $CA_PRIVATE_KEY_PATH \
-             -sha256 \
-             -days 365 \
-             -set_serial 2 \
-             -extensions v3_client \
-	     -extfile openssl.cnf 
+  openssl x509 -req \
+               -in $TARGET_DIR/server.req \
+               -out $TARGET_DIR/server.crt \
+               -CA $TARGET_DIR/ca.crt \
+               -CAkey "$CA_PRIVATE_KEY_PATH" \
+               -sha256 \
+               -days 365 \
+               -set_serial 1 \
+               -extensions v3_server \
+         -extfile openssl.cnf
 
-to_der x509 $TARGET_DIR/client.crt
+  to_der x509 $TARGET_DIR/server.crt
+fi
 
+if [[ -n ${GENERATE_CLIENT} ]]; then
+  openssl req -nodes \
+              -newkey rsa:2048 \
+              -keyout $TARGET_DIR/client.key \
+              -out $TARGET_DIR/client.req \
+              -sha256 \
+              -batch \
+              -subj "/CN=Tunneler Client"
+
+  to_der rsa $TARGET_DIR/client.key
+
+  openssl x509 -req \
+               -in $TARGET_DIR/client.req \
+               -out $TARGET_DIR/client.crt \
+               -CA $TARGET_DIR/ca.crt \
+               -CAkey "$CA_PRIVATE_KEY_PATH" \
+               -sha256 \
+               -days 365 \
+               -set_serial 2 \
+               -extensions v3_client \
+         -extfile openssl.cnf
+
+  to_der x509 $TARGET_DIR/client.crt
+fi

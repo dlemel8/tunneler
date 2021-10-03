@@ -19,7 +19,6 @@ subjectAltName = @server_alt_names
 
 [ server_alt_names ]
 DNS.1 = server.tunneler
-DNS.2 = localhost
 
 [ v3_client ]
 subjectKeyIdentifier = hash
@@ -27,4 +26,3 @@ basicConstraints = critical,CA:false
 authorityKeyIdentifier = keyid:always,issuer:always
 keyUsage = nonRepudiation, digitalSignature
 extendedKeyUsage = critical, clientAuth
-

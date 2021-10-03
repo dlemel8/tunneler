@@ -1,15 +1,20 @@
 import asyncio
 from asyncio import StreamReader, StreamWriter
 from copy import copy
+from dataclasses import dataclass
 from enum import Enum
 from os import getenv
-from typing import Union, Dict, Any, Optional, List
+from pathlib import Path
+from subprocess import run
+from tempfile import TemporaryDirectory
+from typing import Union, Dict, Any, Optional, List, Tuple
 
 import aioredis
 import pytest
 from python_on_whales import docker, Image, Container
 
 DNS_SUFFIX = '.dlemel8.xyz'
+TLS_SERVER_NAME = 'server.tunneler'
 
 
 class TestPorts(Enum):
@@ -21,6 +26,7 @@ class TestPorts(Enum):
 class TunnelerType(Enum):
     TCP = 'tcp'
     DNS = 'dns'
+    TLS = 'tls'
 
 
 class TunneledType(Enum):
@@ -114,7 +120,8 @@ def run_tunneler_container(image: Image,
                            tunneled_type: TunneledType,
                            local_port: Union[TestPorts, int],
                            remote_port: TestPorts,
-                           extra_env_vars: Optional[Dict[str, Any]] = None) -> Container:
+                           extra_env_vars: Optional[Dict[str, Any]] = None,
+                           volumes: Optional[List[Tuple[str, str]]] = None) -> Container:
     if isinstance(local_port, TestPorts):
         local_port_value = local_port.value
     elif isinstance(local_port, int):
@@ -138,6 +145,7 @@ def run_tunneler_container(image: Image,
             **extra_env_vars,
         },
         networks=['host'],
+        volumes=volumes or [],
     )
 
 
@@ -208,6 +216,48 @@ def udp_over_tcp_server(server_image: Image) -> Container:
     print_log_and_delete_container(container)
 
 
+@dataclass
+class PkiDerPaths:
+    ca_certificate: Path
+    server_key: Path
+    server_certificate: Path
+    client_key: Path
+    client_certificate: Path
+
+
+@pytest.fixture(scope='session')
+def pki() -> PkiDerPaths:
+    with TemporaryDirectory() as tmp_dir:
+        run(f'bash pki.sh -k ../ssh/id_rsa -t {tmp_dir} ca server client', shell=True, check=True)
+        tmp_dir_path = Path(tmp_dir)
+        yield PkiDerPaths(
+            tmp_dir_path.joinpath('ca.crt.der'),
+            tmp_dir_path.joinpath('server.key.der'),
+            tmp_dir_path.joinpath('server.crt.der'),
+            tmp_dir_path.joinpath('client.key.der'),
+            tmp_dir_path.joinpath('client.crt.der'),
+        )
+
+
+@pytest.fixture
+def tcp_over_tls_server(server_image: Image, pki: PkiDerPaths) -> Container:
+    container = run_tunneler_container(server_image,
+                                       'test_server',
+                                       TunnelerType.TLS,
+                                       TunneledType.TCP,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       TestPorts.BACKEND_PORT,
+                                       extra_env_vars={'CA_CERT': '/ca_certificate',
+                                                       'KEY': '/server_key',
+                                                       'CERT': '/server_certificate',
+                                                       'SERVER_HOSTNAME': TLS_SERVER_NAME},
+                                       volumes=[(str(pki.ca_certificate), '/ca_certificate'),
+                                                (str(pki.server_key), '/server_key'),
+                                                (str(pki.server_certificate), '/server_certificate')])
+    yield container
+    print_log_and_delete_container(container)
+
+
 @pytest.fixture(scope='session')
 def client_image() -> Image:
     image = build_tunneler_image('client', 'test_client')
@@ -265,6 +315,25 @@ def udp_over_tcp_client(client_image: Image) -> Container:
                                        TunneledType.UDP,
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT)
+    yield container
+    print_log_and_delete_container(container)
+
+
+@pytest.fixture
+def tcp_over_tls_client(client_image: Image, pki: PkiDerPaths) -> Container:
+    container = run_tunneler_container(client_image,
+                                       'test_client',
+                                       TunnelerType.TLS,
+                                       TunneledType.TCP,
+                                       TestPorts.TUNNELER_PORT,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       extra_env_vars={'CA_CERT': '/ca_certificate',
+                                                       'KEY': '/client_key',
+                                                       'CERT': '/client_certificate',
+                                                       'SERVER_HOSTNAME': TLS_SERVER_NAME},
+                                       volumes=[(str(pki.ca_certificate), '/ca_certificate'),
+                                                (str(pki.client_key), '/client_key'),
+                                                (str(pki.client_certificate), '/client_certificate')])
     yield container
     print_log_and_delete_container(container)
 
