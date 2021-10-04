@@ -6,11 +6,13 @@ from enum import Enum
 from os import getenv
 from pathlib import Path
 from subprocess import run
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, NamedTemporaryFile
 from typing import Union, Dict, Any, Optional, List, Tuple
 
 import aioredis
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from python_on_whales import docker, Image, Container
 
 DNS_SUFFIX = '.dlemel8.xyz'
@@ -216,6 +218,20 @@ def udp_over_tcp_server(server_image: Image) -> Container:
     print_log_and_delete_container(container)
 
 
+@pytest.fixture(scope='session')
+def ca_private_ca() -> str:
+    with NamedTemporaryFile() as key_file:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        key_file.write(pem)
+        key_file.flush()
+        yield key_file.name
+
+
 @dataclass
 class PkiDerPaths:
     ca_certificate: Path
@@ -226,10 +242,10 @@ class PkiDerPaths:
 
 
 @pytest.fixture(scope='session')
-def pki() -> PkiDerPaths:
-    with TemporaryDirectory() as tmp_dir:
-        run(f'bash pki.sh -k ../ssh/id_rsa -t {tmp_dir} ca server client', shell=True, check=True)
-        tmp_dir_path = Path(tmp_dir)
+def pki(ca_private_ca: str) -> PkiDerPaths:
+    with TemporaryDirectory() as pki_dir:
+        run(f'bash pki.sh -k {ca_private_ca} -t {pki_dir} ca server client', shell=True, check=True)
+        tmp_dir_path = Path(pki_dir)
         yield PkiDerPaths(
             tmp_dir_path.joinpath('ca.crt.der'),
             tmp_dir_path.joinpath('server.key.der'),
