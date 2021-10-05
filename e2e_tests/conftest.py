@@ -15,14 +15,14 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from python_on_whales import docker, Image, Container
 
-DNS_SUFFIX = '.dlemel8.xyz'
+DNS_CLIENT_SUFFIX = '.dlemel8.xyz'
 TLS_SERVER_NAME = 'server.tunneler'
 
 
 class TestPorts(Enum):
-    BACKEND_PORT = 8080
+    BACKEND_PORT = 8089
     UNTUNNELER_PORT = 8899
-    TUNNELER_PORT = 8888
+    TUNNELER_PORT = 8889
 
 
 class TunnelerType(Enum):
@@ -174,7 +174,7 @@ def tcp_over_dns_server(server_image: Image) -> Container:
                                        TestPorts.BACKEND_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300_000,
-                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+                                                       'CLIENT_SUFFIX': DNS_CLIENT_SUFFIX})
     yield container
     print_log_and_delete_container(container)
 
@@ -189,7 +189,7 @@ def udp_over_dns_server(server_image: Image) -> Container:
                                        TestPorts.BACKEND_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 300_000,
-                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+                                                       'CLIENT_SUFFIX': DNS_CLIENT_SUFFIX})
     yield container
     print_log_and_delete_container(container)
 
@@ -274,6 +274,25 @@ def tcp_over_tls_server(server_image: Image, pki: PkiDerPaths) -> Container:
     print_log_and_delete_container(container)
 
 
+@pytest.fixture
+def udp_over_tls_server(server_image: Image, pki: PkiDerPaths) -> Container:
+    container = run_tunneler_container(server_image,
+                                       'test_server',
+                                       TunnelerType.TLS,
+                                       TunneledType.UDP,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       TestPorts.BACKEND_PORT,
+                                       extra_env_vars={'CA_CERT': '/ca_certificate',
+                                                       'KEY': '/server_key',
+                                                       'CERT': '/server_certificate',
+                                                       'SERVER_HOSTNAME': TLS_SERVER_NAME},
+                                       volumes=[(str(pki.ca_certificate), '/ca_certificate'),
+                                                (str(pki.server_key), '/server_key'),
+                                                (str(pki.server_certificate), '/server_certificate')])
+    yield container
+    print_log_and_delete_container(container)
+
+
 @pytest.fixture(scope='session')
 def client_image() -> Image:
     image = build_tunneler_image('client', 'test_client')
@@ -291,7 +310,7 @@ def tcp_over_dns_client(client_image: Image) -> Container:
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000,
-                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+                                                       'CLIENT_SUFFIX': DNS_CLIENT_SUFFIX})
     yield container
     print_log_and_delete_container(container)
 
@@ -306,7 +325,7 @@ def udp_over_dns_client(client_image: Image) -> Container:
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30000,
-                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+                                                       'CLIENT_SUFFIX': DNS_CLIENT_SUFFIX})
     yield container
     print_log_and_delete_container(container)
 
@@ -341,6 +360,25 @@ def tcp_over_tls_client(client_image: Image, pki: PkiDerPaths) -> Container:
                                        'test_client',
                                        TunnelerType.TLS,
                                        TunneledType.TCP,
+                                       TestPorts.TUNNELER_PORT,
+                                       TestPorts.UNTUNNELER_PORT,
+                                       extra_env_vars={'CA_CERT': '/ca_certificate',
+                                                       'KEY': '/client_key',
+                                                       'CERT': '/client_certificate',
+                                                       'SERVER_HOSTNAME': TLS_SERVER_NAME},
+                                       volumes=[(str(pki.ca_certificate), '/ca_certificate'),
+                                                (str(pki.client_key), '/client_key'),
+                                                (str(pki.client_certificate), '/client_certificate')])
+    yield container
+    print_log_and_delete_container(container)
+
+
+@pytest.fixture
+def udp_over_tls_client(client_image: Image, pki: PkiDerPaths) -> Container:
+    container = run_tunneler_container(client_image,
+                                       'test_client',
+                                       TunnelerType.TLS,
+                                       TunneledType.UDP,
                                        TestPorts.TUNNELER_PORT,
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'CA_CERT': '/ca_certificate',

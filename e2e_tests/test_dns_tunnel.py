@@ -1,6 +1,6 @@
 import pytest
 
-from e2e_tests.conftest import TestPorts, run_tunneler_container, TunnelerType, DNS_SUFFIX, TunneledType, \
+from e2e_tests.conftest import TestPorts, run_tunneler_container, TunnelerType, DNS_CLIENT_SUFFIX, TunneledType, \
     run_test_tcp_single_client_single_short_echo, run_test_tcp_single_client_multiple_short_echo, \
     run_test_tcp_single_client_single_long_echo, run_test_tcp_multiple_clients_single_short_echo, \
     run_test_tcp_multiple_tunnels_single_short_echo, run_test_tcp_server_long_response_and_empty_acks, \
@@ -38,7 +38,7 @@ async def test_tcp_multiple_tunnels_single_short_echo(tcp_echo_server, tcp_over_
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30_000,
-                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+                                                       'CLIENT_SUFFIX': DNS_CLIENT_SUFFIX})
     await run_test_tcp_multiple_tunnels_single_short_echo(container)
 
 
@@ -74,5 +74,5 @@ async def test_udp_multiple_tunnels_single_short_echo(udp_echo_server, udp_over_
                                        TestPorts.UNTUNNELER_PORT,
                                        extra_env_vars={'READ_TIMEOUT_IN_MILLISECONDS': 100,
                                                        'IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS': 30_000,
-                                                       'CLIENT_SUFFIX': DNS_SUFFIX})
+                                                       'CLIENT_SUFFIX': DNS_CLIENT_SUFFIX})
     await run_test_udp_multiple_tunnels_single_short_echo(container)
