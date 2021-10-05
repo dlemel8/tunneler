@@ -68,3 +68,39 @@ services:
     depends_on:
       speed-test:
         condition: service_healthy
+
+  speed-test-tcp-tls-tunnel:
+    image: ghcr.io/dlemel8/tunneler-server:${TAG:-main}
+    environment:
+      LOCAL_PORT: 44301
+      REMOTE_PORT: 5201
+      REMOTE_ADDRESS: speed-test
+      TUNNELED_TYPE: tcp
+      CA_CERT: /ca_certificate
+      KEY: /server_key
+      CERT: /server_certificate
+      SERVER_HOSTNAME: server.tunneler
+    ports:
+      - "44301:44301"
+    command: "tls"
+    depends_on:
+      speed-test:
+        condition: service_healthy
+
+  speed-test-udp-tls-tunnel:
+    image: ghcr.io/dlemel8/tunneler-server:${TAG:-main}
+    environment:
+      LOCAL_PORT: 44301
+      REMOTE_PORT: 5201
+      REMOTE_ADDRESS: speed-test
+      TUNNELED_TYPE: udp
+      CA_CERT: /ca_certificate
+      KEY: /server_key
+      CERT: /server_certificate
+      SERVER_HOSTNAME: server.tunneler
+    ports:
+      - "44302:44301"
+    command: "tls"
+    depends_on:
+      speed-test:
+        condition: service_healthy

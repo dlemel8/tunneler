@@ -7,21 +7,28 @@ See additional variables and more usage examples in each example directory:
 
 ## Run Locally
 ### Server
-Open a shell on the example directory and run:
+Some examples need TLS keys and certificates. Open a shell on this repo root directory and run:
+```sh
+mkdir -p ./pki
+bash pki.sh -k <your SSH private key file path> -t ./pki ca server client
+```
+Then, open a shell on the example directory and run:
 ```sh
 docker-compose up
 ```
 ### Client
-Run Tunneler client with the example local port. for example, for Speed Test run:
+Run Tunneler client with the example local port. for example, for Speed Test TLS tunnel run:
 ```sh
 LOCAL_PORT=8888 \
-REMOTE_PORT=53535 \
+REMOTE_PORT=44301 \
 REMOTE_ADDRESS=127.0.0.1 \
-TUNNELED_TYPE=tcp \
 LOG_LEVEL=debug \
-READ_TIMEOUT_IN_MILLISECONDS=100 \
-IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-../../target/debug/client dns
+TUNNELED_TYPE=tcp \
+CA_CERT=../../pki/ca.crt.der \
+CERT=../../pki/client.crt.der \
+KEY=../../pki/client.key.der \
+SERVER_HOSTNAME=server.tunneler \
+../../target/debug/client tls
 ```
 Then, run the service client. for example, for Speed Test run:
 ```sh
@@ -53,7 +60,7 @@ Server machine is configured and the example server is deployed using Ansible. Y
 an extra variable so Ansible will select the correct Docker compose files:
 ```sh
 ansible-playbook -i ansible_inventory \
-  --key-file <your SSH public key file path> \
+  --key-file <your SSH private key file path> \
   --extra-vars "example_name=authoritative_dns"
   ansible_playbook.yml
 ```
