@@ -233,7 +233,7 @@ def ca_private_ca() -> str:
 
 
 @dataclass
-class PkiDerPaths:
+class PkiPemPaths:
     ca_certificate: Path
     server_key: Path
     server_certificate: Path
@@ -242,21 +242,21 @@ class PkiDerPaths:
 
 
 @pytest.fixture(scope='session')
-def pki(ca_private_ca: str) -> PkiDerPaths:
+def pki(ca_private_ca: str) -> PkiPemPaths:
     with TemporaryDirectory() as pki_dir:
         run(f'bash pki.sh -k {ca_private_ca} -t {pki_dir} ca server client', shell=True, check=True)
         tmp_dir_path = Path(pki_dir)
-        yield PkiDerPaths(
-            tmp_dir_path.joinpath('ca.crt.der'),
-            tmp_dir_path.joinpath('server.key.der'),
-            tmp_dir_path.joinpath('server.crt.der'),
-            tmp_dir_path.joinpath('client.key.der'),
-            tmp_dir_path.joinpath('client.crt.der'),
+        yield PkiPemPaths(
+            tmp_dir_path.joinpath('ca.crt'),
+            tmp_dir_path.joinpath('server.key'),
+            tmp_dir_path.joinpath('server.crt'),
+            tmp_dir_path.joinpath('client.key'),
+            tmp_dir_path.joinpath('client.crt'),
         )
 
 
 @pytest.fixture
-def tcp_over_tls_server(server_image: Image, pki: PkiDerPaths) -> Container:
+def tcp_over_tls_server(server_image: Image, pki: PkiPemPaths) -> Container:
     container = run_tunneler_container(server_image,
                                        'test_server',
                                        TunnelerType.TLS,
@@ -275,7 +275,7 @@ def tcp_over_tls_server(server_image: Image, pki: PkiDerPaths) -> Container:
 
 
 @pytest.fixture
-def udp_over_tls_server(server_image: Image, pki: PkiDerPaths) -> Container:
+def udp_over_tls_server(server_image: Image, pki: PkiPemPaths) -> Container:
     container = run_tunneler_container(server_image,
                                        'test_server',
                                        TunnelerType.TLS,
@@ -355,7 +355,7 @@ def udp_over_tcp_client(client_image: Image) -> Container:
 
 
 @pytest.fixture
-def tcp_over_tls_client(client_image: Image, pki: PkiDerPaths) -> Container:
+def tcp_over_tls_client(client_image: Image, pki: PkiPemPaths) -> Container:
     container = run_tunneler_container(client_image,
                                        'test_client',
                                        TunnelerType.TLS,
@@ -374,7 +374,7 @@ def tcp_over_tls_client(client_image: Image, pki: PkiDerPaths) -> Container:
 
 
 @pytest.fixture
-def udp_over_tls_client(client_image: Image, pki: PkiDerPaths) -> Container:
+def udp_over_tls_client(client_image: Image, pki: PkiPemPaths) -> Container:
     container = run_tunneler_container(client_image,
                                        'test_client',
                                        TunnelerType.TLS,

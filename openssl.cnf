@@ -6,13 +6,11 @@ distinguished_name = req_distinguished_name
 [ v3_ca ]
 subjectKeyIdentifier = hash
 basicConstraints = critical, CA:true
-authorityKeyIdentifier = keyid:always,issuer
 keyUsage = critical, digitalSignature, keyCertSign
 
 [ v3_server ]
 subjectKeyIdentifier = hash
 basicConstraints = critical,CA:false
-authorityKeyIdentifier = keyid:always,issuer:always
 keyUsage = nonRepudiation, digitalSignature
 extendedKeyUsage = critical, serverAuth
 subjectAltName = @server_alt_names
@@ -23,6 +21,5 @@ DNS.1 = server.tunneler
 [ v3_client ]
 subjectKeyIdentifier = hash
 basicConstraints = critical,CA:false
-authorityKeyIdentifier = keyid:always,issuer:always
 keyUsage = nonRepudiation, digitalSignature
 extendedKeyUsage = critical, clientAuth

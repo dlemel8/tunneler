@@ -76,14 +76,6 @@ parse_flags() {
   fi
 }
 
-to_der () {
-    local TYPE=$1
-    local FILE_PATH=$2
-    openssl "${TYPE}" -in "${FILE_PATH}" \
-                      -out "${FILE_PATH}".der \
-                      -outform DER
-}
-
 verify_openssl
 parse_flags "$@"
 
@@ -98,8 +90,6 @@ if [[ -n ${GENERATE_CA} ]]; then
               -subj "/CN=Tunneler CA" \
               -extensions v3_ca \
               -config openssl.cnf
-
-  to_der x509 $TARGET_DIR/ca.crt
 fi
 
 if [[ -n ${GENERATE_SERVER} ]]; then
@@ -111,8 +101,6 @@ if [[ -n ${GENERATE_SERVER} ]]; then
               -batch \
               -subj "/CN=Tunneler Server"
 
-  to_der rsa $TARGET_DIR/server.key
-
   openssl x509 -req \
                -in $TARGET_DIR/server.req \
                -out $TARGET_DIR/server.crt \
@@ -123,8 +111,6 @@ if [[ -n ${GENERATE_SERVER} ]]; then
                -set_serial 1 \
                -extensions v3_server \
          -extfile openssl.cnf
-
-  to_der x509 $TARGET_DIR/server.crt
 fi
 
 if [[ -n ${GENERATE_CLIENT} ]]; then
@@ -136,8 +122,6 @@ if [[ -n ${GENERATE_CLIENT} ]]; then
               -batch \
               -subj "/CN=Tunneler Client"
 
-  to_der rsa $TARGET_DIR/client.key
-
   openssl x509 -req \
                -in $TARGET_DIR/client.req \
                -out $TARGET_DIR/client.crt \
@@ -148,6 +132,4 @@ if [[ -n ${GENERATE_CLIENT} ]]; then
                -set_serial 2 \
                -extensions v3_client \
          -extfile openssl.cnf
-
-  to_der x509 $TARGET_DIR/client.crt
 fi
