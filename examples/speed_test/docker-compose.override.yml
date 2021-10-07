@@ -7,12 +7,12 @@ services:
 
   speed-test-tcp-tls-tunnel:
     volumes:
-      - ../../pki/ca.crt.der:/ca_certificate
-      - ../../pki/server.key.der:/server_key
-      - ../../pki/server.crt.der:/server_certificate
+      - ../../pki/ca.crt:/ca_certificate
+      - ../../pki/server.key:/server_key
+      - ../../pki/server.crt:/server_certificate
 
   speed-test-udp-tls-tunnel:
     volumes:
-      - ../../pki/ca.crt.der:/ca_certificate
-      - ../../pki/server.key.der:/server_key
-      - ../../pki/server.crt.der:/server_certificate
+      - ../../pki/ca.crt:/ca_certificate
+      - ../../pki/server.key:/server_key
+      - ../../pki/server.crt:/server_certificate

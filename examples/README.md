@@ -24,9 +24,9 @@ REMOTE_PORT=44301 \
 REMOTE_ADDRESS=127.0.0.1 \
 LOG_LEVEL=debug \
 TUNNELED_TYPE=tcp \
-CA_CERT=../../pki/ca.crt.der \
-CERT=../../pki/client.crt.der \
-KEY=../../pki/client.key.der \
+CA_CERT=../../pki/ca.crt \
+CERT=../../pki/client.crt \
+KEY=../../pki/client.key \
 SERVER_HOSTNAME=server.tunneler \
 ../../target/debug/client tls
 ```

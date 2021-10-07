@@ -1,1 +1,15 @@
 version: "2.4"
+services:
+  speed-test-tcp-tls-tunnel:
+    volumes:
+      - ./ca_certificate.pem:/ca_certificate
+      - ./server_key.pem:/server_key
+      - ./server_certificate.pem:/server_certificate
+
+  speed-test-udp-tls-tunnel:
+    volumes:
+      - ./ca_certificate.pem:/ca_certificate
+      - ./server_key.pem:/server_key
+      - ./server_certificate.pem:/server_certificate
+
+

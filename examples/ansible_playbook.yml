@@ -33,23 +33,15 @@
       apt:
         update_cache: 'yes'
 
-    - name: Install Docker and Docker Compose
-      import_role:
-        name: nickjj.docker
-      vars:
-        docker__version: '20.10'
-        docker__compose_version: '1.29'
-
-    - name: Copy Docker Compose file
+    - name: Copy Example dir
       ansible.builtin.copy:
-        src: "{{ example_name }}/{{ item }}"
+        src: "{{ example_name }}"
         dest: /tmp/
         mode: '0600'
-      with_items: "{{ compose_files }}"
 
     - name: Create and start Docker services
       community.docker.docker_compose:
-        project_src: /tmp/
+        project_src: "/tmp/{{ example_name }}"
         files: "{{ compose_files }}"
         pull: 'yes'
       vars:
