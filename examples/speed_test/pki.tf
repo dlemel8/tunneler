@@ -31,7 +31,7 @@ resource "tls_locally_signed_cert" "server_certificate" {
   ca_cert_pem        = file(var.CA_CERTIFICATE_PATH)
 
   validity_period_hours = 8760
-  allowed_uses          = [
+  allowed_uses = [
     "digital_signature",
     "server_auth",
   ]
