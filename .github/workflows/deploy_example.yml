@@ -35,7 +35,7 @@ jobs:
           path: examples/ansible_inventory
 
       - name: DEBUG
-        run: cat ansible_inventory || true
+        run: ls -lR ansible_inventory || true
         working-directory: examples
 
       - name: Get Authoritative DNS Docker compose from cache
