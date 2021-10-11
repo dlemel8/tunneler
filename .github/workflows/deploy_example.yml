@@ -33,7 +33,7 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
-          workflow_conclusion: completed
+#          workflow_conclusion: completed
         continue-on-error: true
 
       - name: Load last example directory
@@ -43,7 +43,7 @@ jobs:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
-          workflow_conclusion: completed
+#          workflow_conclusion: completed
         continue-on-error: true
 
       - name: Decrypt and untar example directory
@@ -147,7 +147,7 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
-          workflow_conclusion: completed
+#          workflow_conclusion: completed
 
       - name: Load last example directory
         id: load_example
@@ -156,7 +156,7 @@ jobs:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
-          workflow_conclusion: completed
+#          workflow_conclusion: completed
 
       - name: Decrypt and untar example directory
         run: |
