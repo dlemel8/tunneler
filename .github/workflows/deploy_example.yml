@@ -160,7 +160,7 @@ jobs:
 
       - name: Decrypt and untar example directory
         run: |
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out exaple.tar.gz
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out example.tar.gz
           tar -zxf example.tar.gz ${{ github.event.inputs.exampleName }}/
         working-directory: examples
         shell: bash
