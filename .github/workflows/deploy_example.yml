@@ -147,7 +147,6 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
-          workflow_conclusion: completed
           check_artifacts: true
 
       - name: Load last example directory
@@ -156,7 +155,6 @@ jobs:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
-          workflow_conclusion: completed
           check_artifacts: true
 
       - name: Decrypt and untar example directory
