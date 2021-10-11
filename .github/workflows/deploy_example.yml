@@ -35,13 +35,12 @@ jobs:
 #          restore-keys: |
 #            ansible-inventory-v2--
 
-      - name: Load laest Ansible inventory
-        uses: dawidd6/action-download-artifact@v2
-        with:
-#          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: deploy_example.yml
-          name: ansible_inventory
-          path: examples/ansible_inventory
+#      - name: Load laest Ansible inventory
+#        uses: dawidd6/action-download-artifact@v2
+#        with:
+#          workflow: deploy_example.yml
+#          name: ansible_inventory
+#          path: examples/ansible_inventory
 
       - name: Get Authoritative DNS Docker compose from cache
         if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
