@@ -48,9 +48,7 @@ jobs:
 
       - name: Decrypt and untar example directory
         run: |
-          ls -l .
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out exaple.tar.gz
-          ls -l .
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out example.tar.gz
           tar -zxf example.tar.gz ${{ github.event.inputs.exampleName }}/
         working-directory: examples
         shell: bash
@@ -149,17 +147,16 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
-          workflow_conclusion: neutral
-          check_artifacts: true
+          workflow_conclusion: completed
 
       - name: Load last example directory
+        id: load_example
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
-          workflow_conclusion: neutral
-          check_artifacts: true
+          workflow_conclusion: completed
 
       - name: Decrypt and untar example directory
         run: |
