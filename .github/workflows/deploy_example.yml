@@ -32,7 +32,7 @@ jobs:
         with:
           workflow: deploy_example.yml
           name: ansible_inventory
-          path: examples/ansible_inventory
+          path: examples
 
       - name: DEBUG
         run: ls -lR ansible_inventory || true
