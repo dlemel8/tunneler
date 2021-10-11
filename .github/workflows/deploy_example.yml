@@ -14,6 +14,8 @@ env:
   TF_VAR_LINODE_ROOT_PASSWORD: ${{ secrets.LINODE_ROOT_PASSWORD }}
   TF_VAR_SELECTED_EXAMPLE: ${{ github.event.inputs.exampleName }}
   TF_VAR_REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+  TF_VAR_CA_PRIVATE_KEY_PATH: ${{ secrets.SSH_KEY }}
+  TF_VAR_CA_CERTIFICATE_PATH: ${{ secrets.REDIS_PASSWORD }}
 
 jobs:
   plan-server-infra:
@@ -102,6 +104,12 @@ jobs:
         with:
           path: examples/ansible_inventory
           key: ansible-inventory-v2--${{ hashFiles('**/ansible_inventory') }}
+
+      - name: Save Ansible inventory
+        uses: actions/upload-artifact@v2
+        with:
+          name: ansible_inventory
+          path: examples/ansible_inventory
 
       - name: Cache Authoritative DNS Docker compose
         if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
