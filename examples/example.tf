@@ -19,8 +19,8 @@ variable "CA_CERTIFICATE" {
 }
 
 module "speed_test" {
-  count               = var.SELECTED_EXAMPLE == "speed_test" ? 1 : 0
-  source              = "./speed_test"
+  count          = var.SELECTED_EXAMPLE == "speed_test" ? 1 : 0
+  source         = "./speed_test"
   CA_PRIVATE_KEY = var.CA_PRIVATE_KEY
   CA_CERTIFICATE = var.CA_CERTIFICATE
 }

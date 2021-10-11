@@ -27,13 +27,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Get Ansible inventory from cache
-        uses: actions/cache@v2
+#      - name: Get Ansible inventory from cache
+#        uses: actions/cache@v2
+#        with:
+#          path: examples/ansible_inventory
+#          key: ansible-inventory-${{ github.run_id }}
+#          restore-keys: |
+#            ansible-inventory-v2--
+
+      - name: Load laest Ansible inventory
+        uses: dawidd6/action-download-artifact@v2
         with:
+#          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: deploy_example.yml
+          name: ansible_inventory
           path: examples/ansible_inventory
-          key: ansible-inventory-${{ github.run_id }}
-          restore-keys: |
-            ansible-inventory-v2--
 
       - name: Get Authoritative DNS Docker compose from cache
         if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
