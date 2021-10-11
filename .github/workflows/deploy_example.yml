@@ -33,6 +33,7 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
+          workflow_conclusion: completed
         continue-on-error: true
 
       - name: Load last example directory
@@ -42,6 +43,7 @@ jobs:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
+          workflow_conclusion: completed
         continue-on-error: true
 
       - name: Decrypt and untar example directory
@@ -145,6 +147,8 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
+          workflow_conclusion: completed
+          check_artifacts: true
 
       - name: Load last example directory
         uses: dawidd6/action-download-artifact@v2
@@ -152,6 +156,8 @@ jobs:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
+          workflow_conclusion: completed
+          check_artifacts: true
 
       - name: Decrypt and untar example directory
         run: |
