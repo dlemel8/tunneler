@@ -34,18 +34,21 @@ jobs:
           name: ansible_inventory
           path: examples
 
-      - name: DEBUG
-        run: ls -lR ansible_inventory || true
-        working-directory: examples
-
-      - name: Get Authoritative DNS Docker compose from cache
-        if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
-        uses: actions/cache@v2
+      - name: Load last example directory
+        uses: dawidd6/action-download-artifact@v2
         with:
-          path: examples/authoritative_dns/docker-compose.prod.yml
-          key: authoritative-dns-docker-compose-${{ github.run_id }}
-          restore-keys: |
-            authoritative-dns-docker-compose--
+          workflow: deploy_example.yml
+          name: ${{ github.event.inputs.exampleName }}
+          path: examples
+
+      - name: Decrypt and untar example directory
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out exaple.tar.gz
+          tar -zxf example.tar.gz ${{ github.event.inputs.exampleName }}/
+        working-directory: examples
+        shell: bash
+        env:
+          PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
@@ -102,24 +105,26 @@ jobs:
           terraform apply /tmp/tfplan
         working-directory: examples
 
-      - name: Cache Ansible inventory
-        uses: actions/cache@v2
-        with:
-          path: examples/ansible_inventory
-          key: ansible-inventory-v2--${{ hashFiles('**/ansible_inventory') }}
-
       - name: Save Ansible inventory
         uses: actions/upload-artifact@v2
         with:
           name: ansible_inventory
           path: examples/ansible_inventory
 
-      - name: Cache Authoritative DNS Docker compose
-        if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
-        uses: actions/cache@v2
+      - name: Tar and encrypt example directory
+        run: |
+          tar -zcf example.tar.gz ${{ github.event.inputs.exampleName }}/
+          openssl enc -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in example.tar.gz -out ${{ github.event.inputs.exampleName }}.tar.gz.enc
+        working-directory: examples
+        shell: bash
+        env:
+          PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
+
+      - name: Save example directory
+        uses: actions/upload-artifact@v2
         with:
-          path: examples/authoritative_dns/docker-compose.prod.yml
-          key: authoritative-dns-docker-compose--${{ hashFiles('examples/authoritative_dns/docker-compose.prod.yml') }}
+          name: ${{ github.event.inputs.exampleName }}
+          path: examples/${{ github.event.inputs.exampleName }}.tar.gz.enc
 
   configure-server:
     runs-on: ubuntu-latest
@@ -130,22 +135,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Get Ansible inventory from cache
-        uses: actions/cache@v2
+      - name: Load last Ansible inventory
+        uses: dawidd6/action-download-artifact@v2
         with:
-          path: examples/ansible_inventory
-          key: ansible-inventory-v2--${{ github.run_id }}
-          restore-keys: |
-            ansible-inventory-v2--
+          workflow: deploy_example.yml
+          name: ansible_inventory
+          path: examples
 
-      - name: Get Authoritative DNS Docker compose from cache
-        if: ${{ github.event.inputs.exampleName }} == 'authoritative_dns'
-        uses: actions/cache@v2
+      - name: Load last example directory
+        uses: dawidd6/action-download-artifact@v2
         with:
-          path: examples/authoritative_dns/docker-compose.prod.yml
-          key: authoritative-dns-docker-compose--${{ github.run_id }}
-          restore-keys: |
-            authoritative-dns-docker-compose--
+          workflow: deploy_example.yml
+          name: ${{ github.event.inputs.exampleName }}
+          path: examples
+
+      - name: Decrypt and untar example directory
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out exaple.tar.gz
+          tar -zxf example.tar.gz ${{ github.event.inputs.exampleName }}/
+        working-directory: examples
+        shell: bash
+        env:
+          PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
 
       - name: Load SSH key
         run: 'echo "$SSH_KEY" > /tmp/id_rsa && chmod 600 /tmp/id_rsa'
