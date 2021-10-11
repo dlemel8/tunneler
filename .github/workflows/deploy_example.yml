@@ -33,13 +33,16 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
+        continue-on-error: true
 
       - name: Load last example directory
+        id: load_example
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
+        continue-on-error: true
 
       - name: Decrypt and untar example directory
         run: |
@@ -49,6 +52,7 @@ jobs:
         shell: bash
         env:
           PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
+        if: steps.load_example.outcome == 'success'
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
