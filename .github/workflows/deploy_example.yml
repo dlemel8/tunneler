@@ -14,8 +14,8 @@ env:
   TF_VAR_LINODE_ROOT_PASSWORD: ${{ secrets.LINODE_ROOT_PASSWORD }}
   TF_VAR_SELECTED_EXAMPLE: ${{ github.event.inputs.exampleName }}
   TF_VAR_REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-#  TF_VAR_CA_PRIVATE_KEY_PATH: ${{ secrets.SSH_KEY }}
-#  TF_VAR_CA_CERTIFICATE_PATH: ${{ secrets.REDIS_PASSWORD }}
+  TF_VAR_CA_PRIVATE_KEY: ${{ secrets.SSH_KEY }}
+  TF_VAR_CA_CERTIFICATE: ${{ secrets.CA_CERTIFICATE }}
 
 jobs:
   plan-server-infra:

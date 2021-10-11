@@ -8,12 +8,12 @@ variable "REDIS_PASSWORD" {
   default = ""
 }
 
-variable "CA_PRIVATE_KEY_PATH" {
+variable "CA_PRIVATE_KEY" {
   type    = string
   default = ""
 }
 
-variable "CA_CERTIFICATE_PATH" {
+variable "CA_CERTIFICATE" {
   type    = string
   default = ""
 }
@@ -21,8 +21,8 @@ variable "CA_CERTIFICATE_PATH" {
 module "speed_test" {
   count               = var.SELECTED_EXAMPLE == "speed_test" ? 1 : 0
   source              = "./speed_test"
-  CA_PRIVATE_KEY_PATH = var.CA_PRIVATE_KEY_PATH
-  CA_CERTIFICATE_PATH = var.CA_CERTIFICATE_PATH
+  CA_PRIVATE_KEY = var.CA_PRIVATE_KEY
+  CA_CERTIFICATE = var.CA_CERTIFICATE
 }
 
 module "authoritative_dns" {

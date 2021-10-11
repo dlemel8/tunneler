@@ -1,8 +1,8 @@
-variable "CA_PRIVATE_KEY_PATH" {
+variable "CA_PRIVATE_KEY" {
   type = string
 }
 
-variable "CA_CERTIFICATE_PATH" {
+variable "CA_CERTIFICATE" {
   type = string
 }
 
@@ -27,8 +27,8 @@ resource "tls_locally_signed_cert" "server_certificate" {
   cert_request_pem = tls_cert_request.server_certificate_request.cert_request_pem
 
   ca_key_algorithm   = "RSA"
-  ca_private_key_pem = file(var.CA_PRIVATE_KEY_PATH)
-  ca_cert_pem        = file(var.CA_CERTIFICATE_PATH)
+  ca_private_key_pem = var.CA_PRIVATE_KEY
+  ca_cert_pem        = var.CA_CERTIFICATE
 
   validity_period_hours = 8760
   allowed_uses = [
@@ -38,7 +38,7 @@ resource "tls_locally_signed_cert" "server_certificate" {
 }
 
 resource "local_file" "ca_certificate_file" {
-  content  = file(var.CA_CERTIFICATE_PATH)
+  content  = var.CA_CERTIFICATE
   filename = "${path.module}/ca_certificate.pem"
 }
 
