@@ -50,6 +50,7 @@ jobs:
         run: |
           ls -l .
           openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out exaple.tar.gz
+          ls -l .
           tar -zxf example.tar.gz ${{ github.event.inputs.exampleName }}/
         working-directory: examples
         shell: bash
@@ -148,6 +149,7 @@ jobs:
           workflow: deploy_example.yml
           name: ansible_inventory
           path: examples
+          workflow_conclusion: neutral
           check_artifacts: true
 
       - name: Load last example directory
@@ -156,6 +158,7 @@ jobs:
           workflow: deploy_example.yml
           name: ${{ github.event.inputs.exampleName }}
           path: examples
+          workflow_conclusion: neutral
           check_artifacts: true
 
       - name: Decrypt and untar example directory
