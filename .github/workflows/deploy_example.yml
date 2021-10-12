@@ -56,8 +56,10 @@ jobs:
       - name: Terraform plan
         id: plan
         run: |
+          ls -lR
           terraform init
           terraform plan -detailed-exitcode -out=./tfplan
+          ls -lR
         working-directory: examples
         continue-on-error: true
 
