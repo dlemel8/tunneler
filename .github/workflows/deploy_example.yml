@@ -56,10 +56,8 @@ jobs:
       - name: Terraform plan
         id: plan
         run: |
-          ls -lR
           terraform init
           terraform plan -detailed-exitcode -out=./tfplan
-          ls -lR
         working-directory: examples
         continue-on-error: true
 
@@ -166,9 +164,9 @@ jobs:
           path: examples
           key: examples-final-${{ github.run_id }}
 
-      - name: Tar and encrypt examples directory
+      - name: Tar and encrypt Ansible inventory and example directories
         run: |
-          tar -zcf examples.tar.gz $(ls -d */)
+          tar -zcf examples.tar.gz $(ls -d */) ansible_inventory
           openssl enc -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in examples.tar.gz -out examples.tar.gz.enc
         working-directory: examples
         shell: bash
