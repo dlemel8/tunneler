@@ -27,29 +27,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Load last Ansible inventory
+      - name: Download examples directory
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: deploy_example.yml
-          name: ansible_inventory
+          name: examples
           path: examples
-#          workflow_conclusion: completed
+          workflow_conclusion: completed
         continue-on-error: true
 
-      - name: Load last example directory
-        id: load_example
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: deploy_example.yml
-          name: ${{ github.event.inputs.exampleName }}
-          path: examples
-#          workflow_conclusion: completed
-        continue-on-error: true
-
-      - name: Decrypt and untar example directory
+      - name: Decrypt and untar example directories
         run: |
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out example.tar.gz
-          tar -zxf example.tar.gz ${{ github.event.inputs.exampleName }}/
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in examples.tar.gz.enc -out examples.tar.gz
+          tar -zxf examples.tar.gz --skip-old-files
         working-directory: examples
         shell: bash
         env:
@@ -65,9 +55,8 @@ jobs:
       - name: Terraform plan
         id: plan
         run: |
-          cat ansible_inventory || true
           terraform init
-          terraform plan -detailed-exitcode -out=/tmp/tfplan
+          terraform plan -detailed-exitcode -out=./tfplan
         working-directory: examples
         continue-on-error: true
 
@@ -75,12 +64,19 @@ jobs:
         if: ${{ steps.plan.outputs.exitcode == 1 }}
         run: exit ${{ steps.plan.outputs.exitcode }}
 
-      - name: Cache plan
+      - name: Cache examples dir for plan apply
         uses: actions/cache@v2
         if: ${{ steps.plan.outputs.exitcode == 2 }}
         with:
-          path: /tmp/tfplan
-          key: tfplan-${{ github.run_id }}
+          path: examples
+          key: examples-to-update-${{ github.run_id }}
+
+      - name: Cache final examples dir
+        uses: actions/cache@v2
+        if: ${{ steps.plan.outputs.exitcode == 0 }}
+        with:
+          path: examples
+          key: examples-final-${{ github.run_id }}
 
   apply-server-infra:
     runs-on: ubuntu-latest
@@ -89,14 +85,14 @@ jobs:
     if: ${{ needs.plan-server-infra.outputs.plan-exitcode == 2 }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+#      - name: Checkout repository
+#        uses: actions/checkout@v2
 
-      - name: Get plan from cache
+      - name: Get examples dir for plan apply from cache
         uses: actions/cache@v2
         with:
-          path: /tmp/tfplan
-          key: tfplan-${{ github.run_id }}
+          path: examples
+          key: examples-to-update-${{ github.run_id }}
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
@@ -107,65 +103,30 @@ jobs:
       - name: Terraform apply
         run: |
           terraform init
-          terraform show /tmp/tfplan
-          terraform apply /tmp/tfplan
+          terraform show ./tfplan
+          terraform apply ./tfplan
         working-directory: examples
 
-      - name: Save Ansible inventory
-        uses: actions/upload-artifact@v2
+      - name: Cache final examples dir
+        uses: actions/cache@v2
         with:
-          name: ansible_inventory
-          path: examples/ansible_inventory
-
-      - name: Tar and encrypt example directory
-        run: |
-          tar -zcf example.tar.gz ${{ github.event.inputs.exampleName }}/
-          openssl enc -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in example.tar.gz -out ${{ github.event.inputs.exampleName }}.tar.gz.enc
-        working-directory: examples
-        shell: bash
-        env:
-          PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
-
-      - name: Save example directory
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.event.inputs.exampleName }}
-          path: examples/${{ github.event.inputs.exampleName }}.tar.gz.enc
+          path: examples
+          key: examples-final-${{ github.run_id }}
 
   configure-server:
     runs-on: ubuntu-latest
-    needs: [ apply-server-infra ]
-    if: always()
+    needs: [ plan-server-infra, apply-server-infra ]
+    #    if: always()
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+#      - name: Checkout repository
+#        uses: actions/checkout@v2
 
-      - name: Load last Ansible inventory
-        uses: dawidd6/action-download-artifact@v2
+      - name: Get final examples dir from cache
+        uses: actions/cache@v2
         with:
-          workflow: deploy_example.yml
-          name: ansible_inventory
           path: examples
-#          workflow_conclusion: completed
-
-      - name: Load last example directory
-        id: load_example
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: deploy_example.yml
-          name: ${{ github.event.inputs.exampleName }}
-          path: examples
-#          workflow_conclusion: completed
-
-      - name: Decrypt and untar example directory
-        run: |
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in ${{ github.event.inputs.exampleName }}.tar.gz.enc -out example.tar.gz
-          tar -zxf example.tar.gz ${{ github.event.inputs.exampleName }}/
-        working-directory: examples
-        shell: bash
-        env:
-          PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
+          key: examples-final-${{ github.run_id }}
 
       - name: Load SSH key
         run: 'echo "$SSH_KEY" > /tmp/id_rsa && chmod 600 /tmp/id_rsa'
@@ -198,3 +159,28 @@ jobs:
           ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml --extra-vars "example_name=${{ github.event.inputs.exampleName }}"
         working-directory: examples
 
+  upload_examples_directory:
+    runs-on: ubuntu-latest
+    needs: [ plan-server-infra, apply-server-infra ]
+
+    steps:
+      - name: Get final examples dir from cache
+        uses: actions/cache@v2
+        with:
+          path: examples
+          key: examples-final-${{ github.run_id }}
+
+      - name: Tar and encrypt examples directory
+        run: |
+          tar -zcf examples.tar.gz $(ls -d */)
+          openssl enc -aes-256-cbc -pbkdf2 -pass env:PASSWORD -in examples.tar.gz -out examples.tar.gz.enc
+        working-directory: examples
+        shell: bash
+        env:
+          PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
+
+      - name: Upload encrypted examples directory
+        uses: actions/upload-artifact@v2
+        with:
+          name: examples
+          path: examples/examples.tar.gz.enc
