@@ -114,7 +114,7 @@ jobs:
   configure-server:
     runs-on: ubuntu-latest
     needs: [ apply-server-infra ]
-    if: (needs.apply-server-infra.result == 'success' || needs.apply-server-infra.result == 'skipped')
+    if: ${{ !failure() && !cancelled() }}
 
     steps:
       - name: Get final examples dir from cache
@@ -157,7 +157,7 @@ jobs:
   upload-examples-directory:
     runs-on: ubuntu-latest
     needs: [ apply-server-infra ]
-    if: (needs.apply-server-infra.result == 'success' || needs.apply-server-infra.result == 'skipped')
+    if: ${{ !failure() && !cancelled() }}
 
     steps:
       - name: Get final examples dir from cache
