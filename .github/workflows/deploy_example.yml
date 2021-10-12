@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Download examples directory
+        id: download_examples
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: deploy_example.yml
@@ -44,7 +45,7 @@ jobs:
         shell: bash
         env:
           PASSWORD: ${{secrets.ARTIFACTS_PASSWORD}}
-        if: steps.load_example.outcome == 'success'
+        if: steps.download_examples.outcome == 'success'
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v1
@@ -85,9 +86,6 @@ jobs:
     if: ${{ needs.plan-server-infra.outputs.plan-exitcode == 2 }}
 
     steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v2
-
       - name: Get examples dir for plan apply from cache
         uses: actions/cache@v2
         with:
@@ -116,12 +114,8 @@ jobs:
   configure-server:
     runs-on: ubuntu-latest
     needs: [ plan-server-infra, apply-server-infra ]
-    #    if: always()
 
     steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v2
-
       - name: Get final examples dir from cache
         uses: actions/cache@v2
         with:
@@ -159,7 +153,7 @@ jobs:
           ansible-playbook -i ansible_inventory --key-file /tmp/id_rsa ansible_playbook.yml --extra-vars "example_name=${{ github.event.inputs.exampleName }}"
         working-directory: examples
 
-  upload_examples_directory:
+  upload-examples-directory:
     runs-on: ubuntu-latest
     needs: [ plan-server-infra, apply-server-infra ]
 
