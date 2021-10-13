@@ -4,10 +4,10 @@ version = "0.4.0"
 authors = ["Daniel Segal <dlemel8@gmail.com>"]
 edition = "2018"
 license = "MIT"
-description = "Tunnel TCP or UDP traffic over TCP or DNS (authoritative server or direct connection)"
+description = "Tunnel TCP or UDP traffic over TCP, (mutual) TLS or DNS (authoritative server or direct connection)"
 repository = "https://github.com/dlemel8/tunneler"
 readme = "README.md"
-keywords = ["dns", "tcp", "udp", "tunnel"]
+keywords = ["dns", "tcp", "udp", "tls", "tunnel"]
 categories = ["asynchronous", "network-programming", "command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
