@@ -2,7 +2,8 @@
 This repo contains client and server that allow you to tunnel TCP and UDP traffic over other network protocols.
 
 Currently, supported tunnels are:
-* DNS (authoritative DNS server or direct connection)
+* DNS (authoritative server or direct connection)
+* TLS (mutual authentication)
 * TCP
 
 Main tool is writen in Rust and end-to-end tests are written in Python.
@@ -42,13 +43,15 @@ Run docker image or compiled binary with `--help` for more information
 ## Examples
 This repo contains a few server deployment examples using Docker Compose:
 * Speed Test - iperf3 server exposed via all supported tunnels, allow you to compare tunnels speed.
-* Authoritative DNS - Redis server exposed via DNS tunnel on port UDP/53. Since tunnel is not verify client, Redis 
-authentication is needed.
+* Authoritative DNS - Redis server exposed via DNS tunnel on port UDP/53. Since tunnel does not verify clients, Redis
+  authentication is needed.
+* Pipeline - Redis server exposed via TLS tunnel that itself exposed via DNS tunnel. on port UDP/53. Since tunnel does 
+  verify clients, Redis authentication is not used.
 
 You can run each example locally or deploy it using Terraform and Ansible. See more information [here](examples/README.md).
 
 ## Architecture
-![Architecture](images/architecture.jpg?raw=true "Architecture")
+![Architecture](architecture.jpg?raw=true "Architecture")
 Each executable contains 2 components communicating via a channel of client streams (a tuple of bytes reader and writer):
 * Client Listener binds a socket and convert incoming and outgoing traffic to a new stream.
 * Client Tunneler translate stream reader and writer to the tunnel protocol.
@@ -72,8 +75,8 @@ We have a few challenges here:
 * Every message requires a response before we can send next message.
 * Each DNS query uses randomized source port and transaction ID, so we can't use them as Client Cache key.
 
-To solve those challenges, each client session starts with generating a random Client ID. Client reads data to tunnel 
-and run it via a pipeline of encoders: 
+To solve those challenges, each client session starts with generating a random Client ID (4 alphanumeric chars). Client 
+reads data to tunnel and run it via a pipeline of encoders: 
 * Data is encoded in hex. 
 * Client ID is appended.
 * Client suffix appended. In case the server is running on your authoritative DNS server, suffix is ".\<your domain>".
@@ -90,6 +93,21 @@ Server decodes data (ignoring any non client traffic) and uses Client ID as a ke
 In order to handle large server responses and empty TCP ACKs, read timeout is used in both client and server. If read 
 timeout is expired, empty message will be sent. Both client and server use idle timeout to stop forwarding and cleanup 
 local resources.
+
+### TLS tunneling
+To implement mutual authentication, we use a private Certificate Authority:
+* A self-signed certificate is generated from a private key.
+* Server private key is randomly generated and its public part is embedded in a certificate signed by the self-signed 
+  certificate.
+* Client private key is randomly generated and its public part is embedded in a certificate signed by the self-signed
+  certificate.
+
+Both client and server are configured to use their key and certificate in TLS handshake. The self-signed certificate is 
+used as TLS trust root.
+
+Since Server Name Indication extension is used, client is requesting a specific server name and server is serving its 
+certificate only if that name was requested. The server name must also be part of the certificate, for example as a 
+Subject Alternative Name.
 
 ## Testing
 ### Run Unit Tests
