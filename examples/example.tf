@@ -31,3 +31,10 @@ module "authoritative_dns" {
   PUBLIC_IP      = linode_instance.tunneler_example.ip_address
   REDIS_PASSWORD = var.REDIS_PASSWORD
 }
+
+module "pipeline" {
+  count          = var.SELECTED_EXAMPLE == "pipeline" ? 1 : 0
+  source         = "./pipeline"
+  CA_PRIVATE_KEY = var.CA_PRIVATE_KEY
+  CA_CERTIFICATE = var.CA_CERTIFICATE
+}
