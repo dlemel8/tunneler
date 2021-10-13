@@ -10,7 +10,8 @@ This example contains iperf3 server exposed via all supported tunnels:
 In addition, in development mode, iperf3 server itself exposed on port 45201 (TCP + UDP).
 
 ## Terraform Variables
-None.
+* CA_PRIVATE_KEY - private key (for example, SSH RSA) that signs CA certificate.
+* CA_CERTIFICATE - certificate that will sign server certificate (use CA certificate as CA_CERT of Tunneler client).
 
 ## Client
 After you deploy server, you can run iperf3 client via one or more tunnels.

@@ -1,0 +1,42 @@
+version: "2.4"
+services:
+  redis:
+    image: redis:6.0.12-alpine
+    expose:
+      - 6379
+    healthcheck:
+      test: redis-cli ping
+
+  redis-tls-tunnel:
+    image: ghcr.io/dlemel8/tunneler-server:${TAG:-main}
+    environment:
+      LOCAL_PORT: 46379
+      REMOTE_PORT: 6379
+      REMOTE_ADDRESS: redis
+      TUNNELED_TYPE: tcp
+      CA_CERT: /ca_certificate
+      KEY: /server_key
+      CERT: /server_certificate
+      SERVER_HOSTNAME: server.tunneler
+    expose:
+      - 46379
+    command: "tls"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  tls-dns-tunnel:
+    image: ghcr.io/dlemel8/tunneler-server:${TAG:-main}
+    environment:
+      LOCAL_PORT: 56379
+      REMOTE_PORT: 46379
+      REMOTE_ADDRESS: redis-tls-tunnel
+      TUNNELED_TYPE: tcp
+      READ_TIMEOUT_IN_MILLISECONDS: 100
+      IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS: 300000
+    ports:
+      - "56379:56379/udp"
+    command: "dns"
+    depends_on:
+      redis-tls-tunnel:
+        condition: service_started

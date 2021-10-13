@@ -1,0 +1,13 @@
+version: "2.4"
+services:
+  redis:
+    ports:
+      - "6379:6379/tcp"
+
+  redis-tls-tunnel:
+    ports:
+      - "46379:46379/tcp"
+    volumes:
+      - ../../pki/ca.crt:/ca_certificate
+      - ../../pki/server.key:/server_key
+      - ../../pki/server.crt:/server_certificate

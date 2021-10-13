@@ -1,0 +1,21 @@
+version: "2.4"
+services:
+  redis:
+    networks:
+      - backend
+
+  redis-tls-tunnel:
+    networks:
+      - backend
+      - default
+    volumes:
+      - ./ca_certificate.pem:/ca_certificate
+      - ./server_key.pem:/server_key
+      - ./server_certificate.pem:/server_certificate
+
+  tls-dns-tunnel:
+    networks:
+      - default
+
+networks:
+  backend:
