@@ -10,21 +10,21 @@ use trust_dns_resolver::Resolver;
 pub enum TunnelerType {
     Tcp,
     Dns {
-        #[structopt(env)]
+        #[structopt(long, env)]
         read_timeout_in_milliseconds: u64,
-        #[structopt(env)]
+        #[structopt(long, env)]
         idle_client_timeout_in_milliseconds: u64,
-        #[structopt(default_value = "", env)]
+        #[structopt(default_value = "", long, env)]
         client_suffix: String,
     },
     Tls {
-        #[structopt(env)]
+        #[structopt(long, env)]
         ca_cert: PathBuf,
-        #[structopt(env)]
+        #[structopt(long, env)]
         cert: PathBuf,
-        #[structopt(env)]
+        #[structopt(long, env)]
         key: PathBuf,
-        #[structopt(env)]
+        #[structopt(long, env)]
         server_hostname: String,
     },
 }
@@ -53,13 +53,13 @@ pub struct Cli {
     #[structopt(subcommand)]
     pub tunneler_type: TunnelerType,
 
-    #[structopt(env, possible_values = &TunneledType::variants(), case_insensitive = true)]
+    #[structopt(long, env, possible_values = &TunneledType::variants(), case_insensitive = true)]
     pub tunneled_type: TunneledType,
 
-    #[structopt(env, parse(try_from_str = parse_or_resolve_ip))]
+    #[structopt(long, env, parse(try_from_str = parse_or_resolve_ip))]
     pub remote_address: IpAddr,
 
-    #[structopt(env)]
+    #[structopt(long, env)]
     pub remote_port: u16,
 
     #[structopt(default_value = "0.0.0.0", long, env)]

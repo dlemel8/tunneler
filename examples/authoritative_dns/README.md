@@ -19,7 +19,7 @@ TUNNELED_TYPE=tcp \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
 LOG_LEVEL=debug \
-../../target/debug/client dns
+../../target/release/client dns
 ```
 
 Then, run Redis client and direct it to the tunnel local port, for example:
@@ -37,7 +37,7 @@ TUNNELED_TYPE=tcp \
 CLIENT_SUFFIX=.dlemel8.xyz \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-../../target/debug/client dns
+../../target/release/client dns
 ```
 
 Then, run Redis client and direct it to the tunnel local port, for example:

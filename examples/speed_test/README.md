@@ -30,7 +30,7 @@ CA_CERT=../../pki/ca.crt \
 CERT=../../pki/client.crt \
 KEY=../../pki/client.key \
 SERVER_HOSTNAME=server.tunneler \
-../../target/debug/client tls
+../../target/release/client tls
 ```
 
 Then, run iperf3 client and direct it to the tunnel local port, for example:
@@ -50,7 +50,7 @@ TUNNELED_TYPE=tcp \
 LOG_LEVEL=debug \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-../../target/debug/client dns
+../../target/release/client dns
 
 LOCAL_PORT=8888 \
 REMOTE_PORT=53536 \
@@ -59,7 +59,7 @@ TUNNELED_TYPE=udp \
 LOG_LEVEL=debug \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-../../target/debug/client dns
+../../target/release/client dns
 ```
 
 Then, run iperf3 client and direct it to the tunnels local port, for example:

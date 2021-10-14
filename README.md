@@ -32,11 +32,14 @@ docker run -e LOCAL_PORT=45301 \
 ```
 ### Option 2: locally compiled binary
 ```sh
-READ_TIMEOUT_IN_MILLISECONDS=100 \
-IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-TUNNELED_TYPE=tcp \
-LOG_LEVEL=debug \
-./target/debug/client 1.1.1.1 53 dns
+./target/release/client \
+  --tunneled-type tcp \
+  --remote-address 1.1.1.1 \
+  --remote-port 53 \
+  --log-level debug \
+  dns \
+  --read-timeout-in-milliseconds 100 \
+  --idle-client-timeout-in-milliseconds 30000
 ```
 Run docker image or compiled binary with `--help` for more information
 
@@ -45,8 +48,8 @@ This repo contains a few server deployment examples using Docker Compose:
 * Speed Test - iperf3 server exposed via all supported tunnels, allow you to compare tunnels speed.
 * Authoritative DNS - Redis server exposed via DNS tunnel on port UDP/53. Since tunnel does not verify clients, Redis
   authentication is needed.
-* Pipeline - Redis server exposed via TLS tunnel that itself exposed via DNS tunnel. on port UDP/53. Since tunnel does 
-  verify clients, Redis authentication is not used.
+* Pipeline - Redis server exposed via TLS tunnel that itself exposed via DNS tunnel. Since tunnel does verify clients, 
+  Redis authentication is not used.
 
 You can run each example locally or deploy it using Terraform and Ansible. See more information [here](examples/README.md).
 

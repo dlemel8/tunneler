@@ -20,7 +20,7 @@ LOG_LEVEL=debug \
 TUNNELED_TYPE=tcp \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-../../target/debug/client dns
+../../target/release/client dns
 
 LOCAL_PORT=8887 \
 REMOTE_PORT=8886 \
@@ -31,7 +31,7 @@ CA_CERT=../../pki/ca.crt \
 CERT=../../pki/client.crt \
 KEY=../../pki/client.key \
 SERVER_HOSTNAME=server.tunneler \
-../../target/debug/client tls
+../../target/release/client tls
 ```
 
 Then, run Redis client and direct it to the TLS tunnel local port, for example:

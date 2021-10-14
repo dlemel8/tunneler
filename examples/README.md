@@ -28,7 +28,7 @@ CA_CERT=../../pki/ca.crt \
 CERT=../../pki/client.crt \
 KEY=../../pki/client.key \
 SERVER_HOSTNAME=server.tunneler \
-../../target/debug/client tls
+../../target/release/client tls
 ```
 Then, run the service client. for example, for Speed Test run:
 ```sh
@@ -74,7 +74,7 @@ TUNNELED_TYPE=tcp \
 CLIENT_SUFFIX=.dlemel8.xyz \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
-../target/debug/client dns
+../target/release/client dns
 ```
 Then, run the service client. for example, for Authoritative DNS run:
 ```sh
