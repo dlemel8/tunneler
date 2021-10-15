@@ -1,4 +1,4 @@
-# Speed Test
+# Pipeline
 This example contains Redis server exposed via TCP over TLS tunnel, that itself exposed via TCP over DNS tunnel:
 * DNS tunnel is exposed on port UDP/56379
 * In production mode, multiple docker compose networks are used to make redis inaccessible from DNS tunnel container
