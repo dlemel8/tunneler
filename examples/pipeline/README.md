@@ -1,12 +1,12 @@
 # Speed Test
-This example contains Redis server exposed via TCP over TLS tunnel, that itself exposed via TLS over DNS tunnel:
+This example contains Redis server exposed via TCP over TLS tunnel, that itself exposed via TCP over DNS tunnel:
 * DNS tunnel is exposed on port UDP/56379
-* In production mode, multiple docker compose networks are used to make redis inaccessible from DNS tunnel
+* In production mode, multiple docker compose networks are used to make redis inaccessible from DNS tunnel container
 * In development mode, Redis is exposed on port TCP/6379 and TLS tunnel is exposed on port TLS/46379
 
 ## Terraform Variables
 * CA_PRIVATE_KEY - private key (for example, SSH RSA) that signs CA certificate.
-* CA_CERTIFICATE - certificate that will sign server certificate (use CA certificate as CA_CERT of Tunneler client).
+* CA_CERTIFICATE - certificate that will sign server certificate (and should be used as CA_CERT of Tunneler client).
 
 ## Client
 After you deploy server, you can run Redis client via a TLS tunnel and TLS tunnel via a DNS tunnel.

@@ -6,7 +6,7 @@ Currently, supported tunnels are:
 * TLS (mutual authentication)
 * TCP
 
-Main tool is writen in Rust and end-to-end tests are written in Python.
+Main tool is written in Rust and end-to-end tests are written in Python.
 
 ## Installation
 ### Option 1: client and server docker images
@@ -42,6 +42,17 @@ docker run -e LOCAL_PORT=45301 \
   --idle-client-timeout-in-milliseconds 30000
 ```
 Run docker image or compiled binary with `--help` for more information
+
+## Testing
+### Run Unit Tests
+```sh
+cargo test --all-targets
+```
+### Run End-to-End Tests
+```sh
+python3 -m pip install -r e2e_tests/requirements.txt
+PYTHONPATH=. python3 -m pytest -v
+```
 
 ## Examples
 This repo contains a few server deployment examples using Docker Compose:
@@ -82,7 +93,7 @@ To solve those challenges, each client session starts with generating a random C
 reads data to tunnel and run it via a pipeline of encoders: 
 * Data is encoded in hex. 
 * Client ID is appended.
-* Client suffix appended. In case the server is running on your authoritative DNS server, suffix is ".\<your domain>".
+* Client suffix is appended. In case the server is running on your authoritative DNS server, suffix is ".\<your domain>".
 
 Encoded data is then used as the name of a TXT DNS query.
 
@@ -99,26 +110,13 @@ local resources.
 
 ### TLS tunneling
 To implement mutual authentication, we use a private Certificate Authority:
-* A self-signed certificate is generated from a private key.
-* Server private key is randomly generated and its public part is embedded in a certificate signed by the self-signed 
-  certificate.
-* Client private key is randomly generated and its public part is embedded in a certificate signed by the self-signed
-  certificate.
+* A self-signed CA certificate is generated from a private key.
+* Server private key is randomly generated and its public part is used in a certificate signed by the CA certificate.
+* Client private key is randomly generated and its public part is used in a certificate signed by the CA certificate.
 
-Both client and server are configured to use their key and certificate in TLS handshake. The self-signed certificate is 
-used as TLS trust root.
+Both client and server are configured to use their key and certificate in TLS handshake. The CA certificate is used as 
+root certificate.
 
 Since Server Name Indication extension is used, client is requesting a specific server name and server is serving its 
 certificate only if that name was requested. The server name must also be part of the certificate, for example as a 
 Subject Alternative Name.
-
-## Testing
-### Run Unit Tests
-```sh
-cargo test --all-targets
-```
-### Run End-to-End Tests
-```sh
-python3 -m pip install -r e2e_tests/requirements.txt
-PYTHONPATH=. python3 -m pytest -v
-```

@@ -14,7 +14,7 @@ First, run tunnel with server IP as `REMOTE_ADDRESS`, for example:
 ```sh
 LOCAL_PORT=8888 \
 REMOTE_PORT=5333 \
-REMOTE_ADDRESS=127.0.0.1 \
+REMOTE_ADDRESS=<your server IP> \
 TUNNELED_TYPE=tcp \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
@@ -28,13 +28,13 @@ docker run --net=host --rm -it redis:6.0.12-alpine redis-cli -p 8888 info
 ```
 
 ### Authoritative DNS server
-First, run tunnel with a public DNS resolver IP as `REMOTE_ADDRESS` and your domain as `CLIENT_SUFFIX`, for example:
+First, run tunnel with a DNS resolver IP as `REMOTE_ADDRESS` and your domain as `CLIENT_SUFFIX`, for example:
 ```sh
 LOCAL_PORT=8888 \
 REMOTE_PORT=53 \
 REMOTE_ADDRESS=1.1.1.1 \
 TUNNELED_TYPE=tcp \
-CLIENT_SUFFIX=.dlemel8.xyz \
+CLIENT_SUFFIX=.<your authoritative server domain> \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
 ../../target/release/client dns

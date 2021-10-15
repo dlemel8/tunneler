@@ -1,9 +1,10 @@
 # Server Deployment Examples
-All examples are written in Docker compose. You can run each example locally or deploy it using Terraform and Ansible.
+All examples are written using Docker compose. You can run each example locally or deploy it using Terraform and Ansible.
 
 See additional variables and more usage examples in each example directory:
 * [speed_test](speed_test/README.md)
 * [authoritative_dns](authoritative_dns/README.md)
+* [pipeline](pipeline/README.md)
 
 ## Run Locally
 ### Server
@@ -38,12 +39,12 @@ iperf3 -c 127.0.0.1 -p 8888
 ## Deploy Server
 ### Server
 Server machine is deployed using Terraform. I selected Linode as my provider. After Linode instance is created, its 
-public IP is written to Ansible inventory and the example prod Docker compose files using Terraform templates.
+public IP is written to Ansible inventory (and any other example specific resource) using Terraform templates.
 
 I deployed my server with GitHub Actions, so I use Terraform Cloud workspace (with local Execution mode) to store Terraform state. You can update
 [terraform cloud file](terraform_cloud.tf) to your workspace or don't set `TF_CLI_CONFIG_FILE` variable.
-Select the example you want using `TF_VAR_SELECTED_EXAMPLE`. If the example needs more environment variables (for 
-example, Authoritative DNS need a redis password), don't forget to set them.
+Select the example you want using `TF_VAR_SELECTED_EXAMPLE`. If the example needs more variables (for example, 
+Authoritative DNS need a redis password), don't forget to set them too.
 
 Open a shell on this directory and run (Authoritative DNS example):
 ```sh
@@ -56,8 +57,8 @@ TF_VAR_REDIS_PASSWORD='<redis password>' \
 terraform apply
 ```
 
-Server machine is configured and the example server is deployed using Ansible. You need to pass the example you want as 
-an extra variable so Ansible will select the correct Docker compose files:
+Server machine is configured and the example application is deployed using Ansible. You need to pass the example you 
+want as an extra variable so Ansible will select the correct Docker compose files:
 ```sh
 ansible-playbook -i ansible_inventory \
   --key-file <your SSH private key file path> \
@@ -65,13 +66,13 @@ ansible-playbook -i ansible_inventory \
   ansible_playbook.yml
 ```
 ### Client
-Run Tunneler client. for example, for Authoritative DNS run (using Cloudflare DNS resolver):
+Run Tunneler client. for example, for Authoritative DNS with Cloudflare DNS resolver run:
 ```sh
 LOCAL_PORT=8888 \
 REMOTE_PORT=53 \
 REMOTE_ADDRESS=1.1.1.1 \
 TUNNELED_TYPE=tcp \
-CLIENT_SUFFIX=.dlemel8.xyz \
+CLIENT_SUFFIX=.<your authoritative server domain> \
 READ_TIMEOUT_IN_MILLISECONDS=100 \
 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 \
 ../target/release/client dns
