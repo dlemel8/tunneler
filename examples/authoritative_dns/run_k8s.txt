@@ -1,0 +1,5 @@
+- kind create cluster
+- kubectl apply -f examples/authoritative_dns/dev.yml
+- kubectl apply -f examples/authoritative_dns/dev-service.yml
+- LOCAL_PORT=8886 REMOTE_PORT=30000 REMOTE_ADDRESS=172.23.0.2 READ_TIMEOUT_IN_MILLISECONDS=100 IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS=30000 LOG_LEVEL=debug TUNNELED_TYPE=tcp ./target/debug/client dns
+- docker run --net=host --rm -it redis:6.0.12-alpine redis-cli -p 8886 info

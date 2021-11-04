@@ -1,31 +1,38 @@
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: authoritative-dns
-  labels:
-    app: authoritative_dns
 spec:
-  containers:
-    - name: redis
-      image: redis:6.0.12-alpine
-      ports:
-        - containerPort: 6379
-    - name: redis-dns-tunnel
-      image: ghcr.io/dlemel8/tunneler-server:main
-      ports:
-        - containerPort: 53
-          protocol: UDP
-      env:
-        - name: LOCAL_PORT
-          value: '53'
-        - name: REMOTE_PORT
-          value: '6379'
-        - name: REMOTE_ADDRESS
-          value: '127.0.0.1'
-        - name: TUNNELED_TYPE
-          value: 'tcp'
-        - name: READ_TIMEOUT_IN_MILLISECONDS
-          value: '100'
-        - name: IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS
-          value: '300000'
-      args: ["dns"]
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authoritative_dns
+  template:
+    metadata:
+      labels:
+        app: authoritative_dns
+    spec:
+      containers:
+        - name: redis
+          image: redis:6.0.12-alpine
+          ports:
+            - containerPort: 6379
+        - name: redis-dns-tunnel
+          image: ghcr.io/dlemel8/tunneler-server:main
+          ports:
+            - containerPort: 53
+              protocol: UDP
+          env:
+            - name: LOCAL_PORT
+              value: '53'
+            - name: REMOTE_PORT
+              value: '6379'
+            - name: REMOTE_ADDRESS
+              value: '127.0.0.1'
+            - name: TUNNELED_TYPE
+              value: 'tcp'
+            - name: READ_TIMEOUT_IN_MILLISECONDS
+              value: '100'
+            - name: IDLE_CLIENT_TIMEOUT_IN_MILLISECONDS
+              value: '300000'
+          args: ["dns"]
