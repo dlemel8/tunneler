@@ -17,6 +17,20 @@ spec:
           image: redis:6.0.12-alpine
           ports:
             - containerPort: 6379
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+            periodSeconds: 5
         - name: redis-dns-tunnel
           image: ghcr.io/dlemel8/tunneler-server:main
           ports:
